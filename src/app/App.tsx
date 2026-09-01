@@ -5,6 +5,7 @@ import NationalDashboard from "./pages/NationalDashboard";
 import CBUDetail from "./pages/CBUDetail";
 import SupplyChainIntelligence from "./pages/SupplyChainIntelligence";
 import SCIDetail from "./pages/SCIDetail";
+import ActionDetail from "./pages/ActionDetail";
 import { cbuData } from "./components/data";
 import { Toaster } from "sonner";
 
@@ -14,7 +15,8 @@ export type NavState =
   | { page: "dashboard" }
   | { page: "cbu-detail"; srNo: number }
   | { page: "supply-chain" }
-  | { page: "sci-detail"; srNo?: number };
+  | { page: "sci-detail"; srNo?: number }
+  | { page: "action-detail" };
 
 export const NavContext = createContext<{
   nav: NavState;
@@ -73,10 +75,11 @@ export default function App() {
               transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               className="flex-1 flex flex-col overflow-hidden"
             >
-              {nav.page === "dashboard"    && <NationalDashboard />}
-              {nav.page === "cbu-detail"   && detailRow && <CBUDetail row={detailRow} />}
-              {nav.page === "supply-chain" && <SupplyChainIntelligence />}
-              {nav.page === "sci-detail"   && <SCIDetail row={sciRow ?? null} />}
+              {nav.page === "dashboard"      && <NationalDashboard />}
+              {nav.page === "cbu-detail"     && detailRow && <CBUDetail row={detailRow} />}
+              {nav.page === "supply-chain"   && <SupplyChainIntelligence />}
+              {nav.page === "sci-detail"     && <SCIDetail row={sciRow ?? null} />}
+              {nav.page === "action-detail"  && <ActionDetail />}
             </motion.div>
           </AnimatePresence>
         </div>

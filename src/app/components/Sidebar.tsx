@@ -4,7 +4,7 @@ import { useNav } from "../App";
 import { cbuData } from "./data";
 import {
   LayoutGrid, Brain, ChevronRight, ChevronDown,
-  ChevronLeft, Network, Activity, Cpu, Zap,
+  ChevronLeft, Network, Activity, Cpu, Zap, ClipboardList,
 } from "lucide-react";
 
 const NAV_BG     = "#003087";
@@ -24,6 +24,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
   const { nav, navigate } = useNav();
   const isDashboard = nav.page === "dashboard" || nav.page === "cbu-detail";
   const isSCI       = nav.page === "supply-chain" || nav.page === "sci-detail";
+  const isActivity  = nav.page === "action-detail";
   const [openPlanning, setOpenPlanning] = useState(true);
   const [openIntel,    setOpenIntel]    = useState(true);
 
@@ -195,6 +196,26 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
                 </motion.div>
               )}
             </AnimatePresence>
+          </div>
+        )}
+
+        {/* ── Monitoring ── */}
+        {collapsed ? (
+          <NavIconBtn
+            active={isActivity}
+            icon={<ClipboardList size={17} />}
+            title="Activity & Monitoring"
+            onClick={() => navigate({ page: "action-detail" })}
+            style={{ marginTop: 4 }}
+          />
+        ) : (
+          <div style={{ marginTop: 16 }}>
+            <NavItemFull
+              active={isActivity}
+              icon={<ClipboardList size={15} />}
+              label="Activity & Monitoring"
+              onClick={() => navigate({ page: "action-detail" })}
+            />
           </div>
         )}
       </nav>
