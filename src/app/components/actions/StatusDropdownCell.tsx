@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Bot, Star, XCircle, type LucideIcon } from "lucide-react";
+import { CheckCircle2, PlayCircle, type LucideIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -10,17 +10,19 @@ import {
 } from "../ui/select";
 import { Dialog, DialogContent } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { scenarioLabel, type ActionRow, type ActionStatus } from "./actionsData";
-
-const ACTION_TO_STATUS: Record<string, ActionStatus> = {
-  Approve: "APPROVED",
-  Reject: "REJECTED",
-};
+import {
+  nextStatusOptions,
+  scenarioLabel,
+  STATUS_THEME,
+  type ActionRow,
+  type ActionStatus,
+} from "./actionsData";
 
 const COMMENT_MAX = 500;
 
 interface DecisionTheme {
   icon: LucideIcon;
+  verb: string;
   banner: string;
   border: string;
   iconBg: string;
@@ -30,62 +32,62 @@ interface DecisionTheme {
   button: string;
 }
 
-const DECISION_THEME: Record<string, DecisionTheme> = {
-  Approve: {
-    icon: Star,
-    banner: "#fef9e7",
-    border: "#fde8b0",
-    iconBg: "#fef3c7",
-    iconColor: "#d97706",
-    title: "#92400e",
-    subtitle: "#92610f",
-    button: "#1565C0",
+const DECISION_THEME: Record<ActionStatus, DecisionTheme> = {
+  PENDING: {
+    icon: PlayCircle, verb: "Reset", banner: "#f3f4f6", border: "#e5e7eb",
+    iconBg: "#e5e7eb", iconColor: "#4b5563", title: "#374151", subtitle: "#6b7280", button: "#6b7280",
   },
-  Reject: {
-    icon: XCircle,
-    banner: "#fef2f2",
-    border: "#fecaca",
-    iconBg: "#fee2e2",
-    iconColor: "#dc2626",
-    title: "#991b1b",
-    subtitle: "#b91c1c",
-    button: "#b91c1c",
+  "IN PROGRESS": {
+    icon: PlayCircle, verb: "Start", banner: "#eff6ff", border: "#bfdbfe",
+    iconBg: "#dbeafe", iconColor: "#1565C0", title: "#1e3a8a", subtitle: "#1d4ed8", button: "#1565C0",
+  },
+  COMPLETED: {
+    icon: CheckCircle2, verb: "Complete", banner: "#effaf7", border: "#b7e4d8",
+    iconBg: "#d7f2e9", iconColor: "#00695C", title: "#00473f", subtitle: "#00695C", button: "#00695C",
   },
 };
 
-const DEFAULT_THEME: DecisionTheme = DECISION_THEME.Approve;
-
-/** Maps a row's current committed status back to the dropdown value that produced it. */
-function currentSelection(row: ActionRow): string {
-  return Object.entries(ACTION_TO_STATUS).find(
-    ([, status]) => status === row.status,
-  )?.[0] ?? "";
-}
+const OPTION_LABEL: Record<ActionStatus, string> = {
+  PENDING: "Pending",
+  "IN PROGRESS": "In Progress",
+  COMPLETED: "Completed",
+};
 
 interface Props {
   row: ActionRow;
   onConfirm: (rowId: string, action: string) => void;
 }
 
-export function ActionDecisionCell({ row, onConfirm }: Props) {
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
+/**
+ * Status column control. Automated steps, and any manual step already
+ * resolved to COMPLETED, show a plain read-only status pill. A step still in
+ * flight gets a dropdown (its trigger doubles as the status pill) offering
+ * only forward moves based on where it is now — PENDING can go to IN
+ * PROGRESS or straight to COMPLETED, IN PROGRESS can only go to COMPLETED.
+ * Picking one opens the confirm-with-comment dialog before it actually commits.
+ */
+export function StatusDropdownCell({ row, onConfirm }: Props) {
+  const [pendingAction, setPendingAction] = useState<ActionStatus | null>(null);
   const [comment, setComment] = useState("");
+  const statusTheme = STATUS_THEME[row.status];
+  const options = nextStatusOptions(row.status);
 
-  if (row.availableActions.length === 0) {
+  // Title Case ("In Progress") instead of the raw ALL-CAPS status value —
+  // all-caps text reads visually larger than the mixed-case text in every
+  // other column at the same font-size, so this is what keeps rows even.
+  if (row.automated || options.length === 0) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium"
-        style={{ backgroundColor: "#f3f4f6", color: "#6b7280" }}
-        title="Handled automatically by SAP — no manual action required"
+        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap"
+        style={{ backgroundColor: statusTheme.bg, color: statusTheme.text }}
       >
-        <Bot size={11} />
-        Automated
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: statusTheme.dot }} />
+        {OPTION_LABEL[row.status]}
       </span>
     );
   }
 
-  const selected = currentSelection(row);
-  const theme = (pendingAction && DECISION_THEME[pendingAction]) || DEFAULT_THEME;
+  const theme = pendingAction ? DECISION_THEME[pendingAction] : DECISION_THEME[row.status];
   const Icon = theme.icon;
   const canSubmit = comment.trim().length > 0;
 
@@ -96,18 +98,24 @@ export function ActionDecisionCell({ row, onConfirm }: Props) {
 
   return (
     <>
-      <Select value={selected} onValueChange={(v) => setPendingAction(v)}>
+      <Select value="" onValueChange={(v) => setPendingAction(v as ActionStatus)}>
         <SelectTrigger
           size="sm"
-          className="h-7 w-[112px] text-xs bg-white"
-          aria-label={`Action for ${row.actionId}`}
+          className="h-7 w-[128px] text-xs font-semibold border-0 cursor-pointer [&_svg]:size-3.5 [&_svg]:opacity-100"
+          style={{ backgroundColor: statusTheme.bg, color: statusTheme.text }}
+          aria-label={`Status for ${row.actionId}`}
         >
-          <SelectValue placeholder="Select…" />
+          <span className="inline-flex items-center gap-1.5 min-w-0">
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: statusTheme.dot }} />
+            {/* Always show the row's committed status, not the pending selection
+                driving the dropdown value. */}
+            <SelectValue placeholder={OPTION_LABEL[row.status]}>{OPTION_LABEL[row.status]}</SelectValue>
+          </span>
         </SelectTrigger>
         <SelectContent>
-          {row.availableActions.map((action) => (
-            <SelectItem key={action} value={action} className="text-xs">
-              {action}
+          {options.map((option) => (
+            <SelectItem key={option} value={option} className="text-xs">
+              {OPTION_LABEL[option]}
             </SelectItem>
           ))}
         </SelectContent>
@@ -125,7 +133,7 @@ export function ActionDecisionCell({ row, onConfirm }: Props) {
             </span>
             <div className="min-w-0">
               <p className="font-bold text-base" style={{ color: theme.title }}>
-                {pendingAction} this action
+                {theme.verb} this action
               </p>
               <p className="text-sm mt-0.5" style={{ color: theme.subtitle }}>
                 Please add a comment explaining this action before submitting.
@@ -171,13 +179,13 @@ export function ActionDecisionCell({ row, onConfirm }: Props) {
                 onClick={() => {
                   if (!pendingAction || !canSubmit) return;
                   onConfirm(row.id, pendingAction);
-                  toast.success(`${row.actionId} marked as ${pendingAction}`, {
+                  toast.success(`${row.actionId} marked as ${OPTION_LABEL[pendingAction]}`, {
                     description: row.description,
                   });
                   closeDialog();
                 }}
               >
-                Submit & {pendingAction}
+                Submit & {theme.verb}
               </Button>
             </div>
           </div>

@@ -1,15 +1,15 @@
 import { Fragment, useMemo, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import {
   ageingColor,
   EXECUTION_STATUS_THEME,
   formatRoute,
   scenarioLabel,
-  STATUS_THEME,
   type ActionRow,
   type ActionStatus,
 } from "./actionsData";
-import { ActionDecisionCell } from "./ActionDecisionCell";
+import { StatusDropdownCell } from "./StatusDropdownCell";
+import { EmailActionCell } from "./EmailActionCell";
 
 type SortCol = "actionId" | "owner" | "slaHrs" | "ageingDays" | "status" | null;
 type SortDir = "asc" | "desc";
@@ -55,7 +55,7 @@ function SortHeader({
     <button
       type="button"
       onClick={() => onSort(col)}
-      className={`inline-flex items-center gap-1 select-none ${align === "right" ? "flex-row-reverse" : ""}`}
+      className={`inline-flex items-center gap-1 select-none cursor-pointer text-xs font-semibold ${align === "right" ? "flex-row-reverse" : ""}`}
     >
       {label}
       <span className="inline-flex flex-col leading-none" style={{ opacity: active ? 1 : 0.4 }}>
@@ -75,18 +75,32 @@ function sortValue(row: ActionRow, col: Exclude<SortCol, null>): string | number
   }
 }
 
-function ScenarioBand({ row }: { row: ActionRow }) {
+function ScenarioBand({
+  row,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  row: ActionRow;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const exec = EXECUTION_STATUS_THEME[row.executionStatus];
   return (
     <tr>
       <td
         colSpan={ACTION_COLS.length}
-        className="px-3 py-2"
+        className="px-3 pr-6 py-2 cursor-pointer select-none"
         style={{ backgroundColor: BAND_BG, borderLeft: `4px solid ${BAND_ACCENT}`, borderBottom: `1px solid ${BORDER}` }}
+        onClick={onToggle}
+        role="button"
+        aria-expanded={!collapsed}
+        title={collapsed ? "Expand actions" : "Collapse actions"}
       >
         <div className="flex items-center flex-wrap gap-x-3 gap-y-1">
           <span
-            className="inline-flex items-center px-2 py-0.5 rounded font-bold text-[11px] whitespace-nowrap"
+            className="inline-flex items-center px-2 py-0.5 rounded font-bold text-xs whitespace-nowrap"
             style={{ backgroundColor: BAND_ACCENT, color: "#ffffff" }}
           >
             {scenarioLabel(row.scenarioType, row.seq)}
@@ -106,12 +120,30 @@ function ScenarioBand({ row }: { row: ActionRow }) {
           <span className="text-xs" style={{ color: "#5b6b85" }}>
             Material <b style={{ color: "#334155" }}>{row.material}</b> · Qty <b style={{ color: "#334155" }}>{row.quantity}</b>
           </span>
+          {collapsed && (
+            <span className="text-xs" style={{ color: "#5b6b85" }}>
+              ({count} action{count === 1 ? "" : "s"})
+            </span>
+          )}
           <span
             className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap ml-auto"
             style={{ backgroundColor: exec.bg, color: exec.text }}
           >
             {row.executionStatus}
           </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+            className="flex items-center justify-center w-5 h-5 rounded shrink-0 transition-colors cursor-pointer"
+            style={{ color: "#1565C0" }}
+            title={collapsed ? "Expand actions" : "Collapse actions"}
+            aria-label={collapsed ? "Expand actions" : "Collapse actions"}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          </button>
         </div>
       </td>
     </tr>
@@ -126,6 +158,15 @@ interface Props {
 export function ActionsTable({ rows, onDecision }: Props) {
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [collapsedItems, setCollapsedItems] = useState<Set<number>>(new Set());
+
+  function toggleItem(item: number) {
+    setCollapsedItems((prev) => {
+      const next = new Set(prev);
+      next.has(item) ? next.delete(item) : next.add(item);
+      return next;
+    });
+  }
 
   function handleSort(col: Exclude<SortCol, null>) {
     if (sortCol === col) {
@@ -156,7 +197,7 @@ export function ActionsTable({ rows, onDecision }: Props) {
 
   const statusCounts = useMemo(() => {
     const counts: Record<ActionStatus, number> = {
-      "IN PROGRESS": 0, PENDING: 0, APPROVED: 0, REJECTED: 0, COMPLETED: 0,
+      PENDING: 0, "IN PROGRESS": 0, COMPLETED: 0,
     };
     for (const r of rows) counts[r.status]++;
     return counts;
@@ -189,7 +230,7 @@ export function ActionsTable({ rows, onDecision }: Props) {
             {ACTION_COLS.map((col, i) => (
               <th
                 key={col.label}
-                className={`px-3 py-2.5 font-semibold whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"}`}
+                className={`px-3 py-2.5 font-semibold whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${i === ACTION_COLS.length - 1 ? "pr-6" : ""}`}
                 style={{
                   borderRight: i < ACTION_COLS.length - 1 ? "1px solid rgba(255,255,255,0.15)" : undefined,
                   position: "sticky",
@@ -209,21 +250,30 @@ export function ActionsTable({ rows, onDecision }: Props) {
         </thead>
         <tbody>
           {grouped
-            ? grouped.map(([item, groupRows]) => (
-                <Fragment key={item}>
-                  <ScenarioBand row={groupRows[0]} />
-                  {groupRows.map((row, i) => (
-                    <ActionRowLine key={row.id} row={row} zebra={i % 2 === 0} onDecision={onDecision} />
-                  ))}
-                </Fragment>
-              ))
-            : sortedRows.map((row, i) => (
-                <ActionRowLine key={row.id} row={row} zebra={i % 2 === 0} onDecision={onDecision} showScenario />
+            ? grouped.map(([item, groupRows]) => {
+                const collapsed = collapsedItems.has(item);
+                return (
+                  <Fragment key={item}>
+                    <ScenarioBand
+                      row={groupRows[0]}
+                      count={groupRows.length}
+                      collapsed={collapsed}
+                      onToggle={() => toggleItem(item)}
+                    />
+                    {!collapsed &&
+                      groupRows.map((row) => (
+                        <ActionRowLine key={row.id} row={row} onDecision={onDecision} />
+                      ))}
+                  </Fragment>
+                );
+              })
+            : sortedRows.map((row) => (
+                <ActionRowLine key={row.id} row={row} onDecision={onDecision} showScenario />
               ))}
         </tbody>
         <tfoot>
           <tr style={{ backgroundColor: HEAD_BG }} className="text-white font-semibold">
-            <td colSpan={colCount} className="px-3 py-2.5">
+            <td colSpan={colCount} className="px-3 pr-6 py-2.5">
               <span className="inline-flex items-center gap-4 flex-wrap">
                 <span>TOTAL — {rows.length} action{rows.length === 1 ? "" : "s"}</span>
                 {(Object.keys(statusCounts) as ActionStatus[])
@@ -254,30 +304,25 @@ function groupByItem(rows: ActionRow[]): Array<[number, ActionRow[]]> {
 
 function ActionRowLine({
   row,
-  zebra,
   onDecision,
   showScenario = false,
 }: {
   row: ActionRow;
-  zebra: boolean;
   onDecision: (rowId: string, action: string) => void;
   showScenario?: boolean;
 }) {
-  const statusTheme = STATUS_THEME[row.status];
-  const bg = zebra ? "#ffffff" : "#f8fafc";
-
   return (
-    <tr style={{ backgroundColor: bg }} className="hover:bg-blue-50 transition-colors">
+    <tr style={{ backgroundColor: "#ffffff" }} className="hover:bg-blue-50 transition-colors">
       {showScenario && (
         <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}` }}>
           <span className="inline-flex items-center gap-1.5">
             <span
-              className="inline-flex items-center px-1.5 py-0.5 rounded font-bold text-[10px]"
+              className="inline-flex items-center px-1.5 py-0.5 rounded font-bold text-xs"
               style={{ backgroundColor: BAND_ACCENT, color: "#ffffff" }}
             >
               {scenarioLabel(row.scenarioType, row.seq)}
             </span>
-            <span className="text-[11px]" style={{ color: "#5b6b85" }}>
+            <span className="text-xs" style={{ color: "#5b6b85" }}>
               {formatRoute(row.plant)}
             </span>
           </span>
@@ -299,16 +344,10 @@ function ActionRowLine({
         {row.ageingDays === null ? "—" : `${row.ageingDays}d`}
       </td>
       <td className="px-3 py-2.5" style={{ borderRight: `1px solid ${BORDER}` }}>
-        <span
-          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap"
-          style={{ backgroundColor: statusTheme.bg, color: statusTheme.text }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: statusTheme.dot }} />
-          {row.status}
-        </span>
+        <StatusDropdownCell row={row} onConfirm={onDecision} />
       </td>
-      <td className="px-3 py-2.5">
-        <ActionDecisionCell row={row} onConfirm={onDecision} />
+      <td className="px-3 pr-6 py-2.5">
+        <EmailActionCell row={row} />
       </td>
     </tr>
   );

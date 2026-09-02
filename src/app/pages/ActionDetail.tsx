@@ -15,10 +15,7 @@ import {
   type ActionStatus,
 } from "../components/actions/actionsData";
 
-const ACTION_TO_STATUS: Record<string, ActionStatus> = {
-  Approve: "APPROVED",
-  Reject: "REJECTED",
-};
+const VALID_STATUSES: ActionStatus[] = ["PENDING", "IN PROGRESS", "COMPLETED"];
 
 const EMPTY_FILTERS = {
   scenarioType: "All",
@@ -38,8 +35,8 @@ export default function ActionDetail() {
   }
 
   function handleDecision(rowId: string, action: string) {
-    const nextStatus = ACTION_TO_STATUS[action];
-    if (!nextStatus) return;
+    if (!VALID_STATUSES.includes(action as ActionStatus)) return;
+    const nextStatus = action as ActionStatus;
     setRows((prev) =>
       prev.map((r) => (r.id === rowId ? { ...r, status: nextStatus } : r)),
     );
@@ -84,7 +81,7 @@ export default function ActionDetail() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           title="Refresh"
-          className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+          className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors cursor-pointer"
           style={{ backgroundColor: "#ffffff24", color: "#fff", border: "1px solid #e5e7eb" }}
         >
           <RefreshCw size={14} />
@@ -93,7 +90,7 @@ export default function ActionDetail() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           title="Export"
-          className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors"
+          className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors cursor-pointer"
           style={{ backgroundColor: "#ffffff24", color: "#fff", border: "1px solid #e5e7eb" }}
         >
           <Download size={14} />
@@ -113,7 +110,7 @@ export default function ActionDetail() {
         </div>
         <button
           type="button"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors shrink-0"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors shrink-0 cursor-pointer"
           style={{ backgroundColor: "#003087" }}
         >
           <RefreshCw size={12} />
@@ -153,7 +150,7 @@ export default function ActionDetail() {
           type="button"
           onClick={clearFilters}
           disabled={!filtersActive}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ color: "#1565C0", border: "1px solid #d1d5db" }}
         >
           <RotateCcw size={11} />

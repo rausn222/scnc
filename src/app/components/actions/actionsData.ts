@@ -2,12 +2,7 @@
 
 export type ScenarioType = "IUT" | "Procurement" | "PO Cancellation";
 export type ExecutionStatus = "IN PROGRESS" | "NOT STARTED" | "COMPLETED";
-export type ActionStatus =
-  | "IN PROGRESS"
-  | "PENDING"
-  | "APPROVED"
-  | "REJECTED"
-  | "COMPLETED";
+export type ActionStatus = "PENDING" | "IN PROGRESS" | "COMPLETED";
 
 export interface ActionRow {
   /** Stable unique key, e.g. "1.1" */
@@ -28,8 +23,8 @@ export interface ActionRow {
   slaHrs: number;
   ageingDays: number | null;
   status: ActionStatus;
-  /** Empty => automated step, no manual decision available */
-  availableActions: string[];
+  /** true => handled automatically by SAP, no manual status change available */
+  automated: boolean;
 }
 
 interface ScenarioSeed {
@@ -45,8 +40,20 @@ interface ScenarioSeed {
     slaHrs: number;
     ageingDays: number | null;
     status: ActionStatus;
-    availableActions: string[];
+    automated: boolean;
   }>;
+}
+
+/**
+ * A manual step can only move forward: PENDING -> IN PROGRESS or COMPLETED,
+ * IN PROGRESS -> COMPLETED. COMPLETED is final (empty = locked, read-only).
+ */
+export function nextStatusOptions(status: ActionStatus): ActionStatus[] {
+  switch (status) {
+    case "PENDING": return ["IN PROGRESS", "COMPLETED"];
+    case "IN PROGRESS": return ["COMPLETED"];
+    case "COMPLETED": return [];
+  }
 }
 
 // ─── Mock data (mirrors the Activity & Monitoring reference design) ──────────
@@ -59,51 +66,51 @@ const SCENARIOS: ScenarioSeed[] = [
     scenarioType: "IUT", seq: 1, plant: "UTR to U535", material: "11100345",
     quantity: "5250 KG", executionStatus: "IN PROGRESS",
     steps: [
-      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: 0, status: "IN PROGRESS", availableActions: ["Approve", "Reject"] },
-      { description: "Source Plant Approval", owner: "Source Factory Planner", slaHrs: 48, ageingDays: 1, status: "IN PROGRESS", availableActions: ["Approve", "Reject"] },
-      { description: "Destination Plant Approval", owner: "Destination Factory Planner", slaHrs: 48, ageingDays: 2, status: "IN PROGRESS", availableActions: ["Approve", "Reject"] },
-      { description: "Create Stock Transfer Order (STO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", availableActions: [] },
-      { description: "Status of Dispatched Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", availableActions: [] },
+      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: 0, status: "IN PROGRESS", automated: false },
+      { description: "Source Plant Approval", owner: "Source Factory Planner", slaHrs: 48, ageingDays: 1, status: "IN PROGRESS", automated: false },
+      { description: "Destination Plant Approval", owner: "Destination Factory Planner", slaHrs: 48, ageingDays: 2, status: "IN PROGRESS", automated: false },
+      { description: "Create Stock Transfer Order (STO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", automated: true },
+      { description: "Status of Dispatched Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", automated: true },
     ],
   },
   {
     scenarioType: "IUT", seq: 2, plant: "U535 to U886", material: "11100678",
     quantity: "3100 KG", executionStatus: "NOT STARTED",
     steps: [
-      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: null, status: "PENDING", availableActions: ["Approve", "Reject"] },
-      { description: "Source Plant Approval", owner: "Source Factory Planner", slaHrs: 48, ageingDays: null, status: "PENDING", availableActions: ["Approve", "Reject"] },
-      { description: "Destination Plant Approval", owner: "Destination Factory Planner", slaHrs: 48, ageingDays: null, status: "PENDING", availableActions: ["Approve", "Reject"] },
-      { description: "Create Stock Transfer Order (STO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", availableActions: [] },
-      { description: "Status of Dispatched Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", availableActions: [] },
+      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: null, status: "PENDING", automated: false },
+      { description: "Source Plant Approval", owner: "Source Factory Planner", slaHrs: 48, ageingDays: null, status: "PENDING", automated: false },
+      { description: "Destination Plant Approval", owner: "Destination Factory Planner", slaHrs: 48, ageingDays: null, status: "PENDING", automated: false },
+      { description: "Create Stock Transfer Order (STO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", automated: true },
+      { description: "Status of Dispatched Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", automated: true },
     ],
   },
   {
     scenarioType: "Procurement", seq: 1, plant: "UTR", material: "10045872",
     quantity: "100 Ton", executionStatus: "NOT STARTED",
     steps: [
-      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: null, status: "PENDING", availableActions: ["Approve", "Reject"] },
-      { description: "Vendor Confirmation", owner: "Procurement Planner", slaHrs: 48, ageingDays: null, status: "PENDING", availableActions: ["Approve", "Reject"] },
-      { description: "Create Purchase Order (PO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", availableActions: [] },
-      { description: "Status of Inbound Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", availableActions: [] },
+      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: null, status: "PENDING", automated: false },
+      { description: "Vendor Confirmation", owner: "Procurement Planner", slaHrs: 48, ageingDays: null, status: "PENDING", automated: false },
+      { description: "Create Purchase Order (PO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", automated: true },
+      { description: "Status of Inbound Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", automated: true },
     ],
   },
   {
     scenarioType: "Procurement", seq: 2, plant: "ULU", material: "10045903",
     quantity: "65 Ton", executionStatus: "IN PROGRESS",
     steps: [
-      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: 0, status: "IN PROGRESS", availableActions: ["Approve", "Reject"] },
-      { description: "Vendor Confirmation", owner: "Procurement Planner", slaHrs: 48, ageingDays: 1, status: "IN PROGRESS", availableActions: ["Approve", "Reject"] },
-      { description: "Create Purchase Order (PO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", availableActions: [] },
-      { description: "Status of Inbound Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", availableActions: [] },
+      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: 0, status: "IN PROGRESS", automated: false },
+      { description: "Vendor Confirmation", owner: "Procurement Planner", slaHrs: 48, ageingDays: 1, status: "IN PROGRESS", automated: false },
+      { description: "Create Purchase Order (PO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", automated: true },
+      { description: "Status of Inbound Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", automated: true },
     ],
   },
   {
     scenarioType: "PO Cancellation", seq: 1, plant: "U535", material: "10045871",
     quantity: "50 Ton", executionStatus: "NOT STARTED",
     steps: [
-      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: null, status: "PENDING", availableActions: ["Approve", "Reject"] },
-      { description: "Buyer Approval", owner: "Destination Factory Planner", slaHrs: 48, ageingDays: null, status: "PENDING", availableActions: ["Approve", "Reject"] },
-      { description: "Cancel Purchase Order (PO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", availableActions: [] },
+      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: null, status: "PENDING", automated: false },
+      { description: "Buyer Approval", owner: "Destination Factory Planner", slaHrs: 48, ageingDays: null, status: "PENDING", automated: false },
+      { description: "Cancel Purchase Order (PO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", automated: true },
     ],
   },
 ];
@@ -152,10 +159,8 @@ export const STATUS_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.
 // ─── Display helpers ────────────────────────────────────────────────────────
 
 export const STATUS_THEME: Record<ActionStatus, { bg: string; text: string; dot: string }> = {
-  "IN PROGRESS": { bg: "#dbeafe", text: "#1565C0", dot: "#1565C0" },
   "PENDING":     { bg: "#f3f4f6", text: "#6b7280", dot: "#9ca3af" },
-  "APPROVED":    { bg: "#dcfce7", text: "#15803d", dot: "#22c55e" },
-  "REJECTED":    { bg: "#fee2e2", text: "#b91c1c", dot: "#ef4444" },
+  "IN PROGRESS": { bg: "#dbeafe", text: "#1565C0", dot: "#1565C0" },
   "COMPLETED":   { bg: "#e0f2f1", text: "#00695C", dot: "#00897B" },
 };
 
