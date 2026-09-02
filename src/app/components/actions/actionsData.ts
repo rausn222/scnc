@@ -9,6 +9,8 @@ export interface ActionRow {
   id: string;
   /** Unique scenario group id — one per distinct IUT/Procurement/PO Cancellation instance */
   item: number;
+  /** Network this action belongs to — several scenario types can share one network */
+  networkId: string;
   /** 1-based sequence within its scenario type, e.g. IUT #1, IUT #2 */
   seq: number;
   scenarioType: ScenarioType;
@@ -60,6 +62,9 @@ export function nextStatusOptions(status: ActionStatus): ActionStatus[] {
 // Multiple instances of the same scenario type are common (several IUT lanes,
 // several Procurement requests running at once) — each is its own group with
 // its own plant route, material and action trail.
+
+/** All mock scenarios below belong to the same network — mirrors the source design. */
+export const NETWORK_ID = "NET-2026-00001";
 
 const SCENARIOS: ScenarioSeed[] = [
   {
@@ -122,6 +127,7 @@ export const ACTIONS_DATA: ActionRow[] = SCENARIOS.flatMap((scenario, itemIdx) =
     return {
       id: actionId,
       item,
+      networkId: NETWORK_ID,
       seq: scenario.seq,
       scenarioType: scenario.scenarioType,
       plant: scenario.plant,
@@ -142,6 +148,15 @@ export function scenarioLabel(scenarioType: ScenarioType, seq: number): string {
 /** Plant route formatted with an arrow for lane-style scenarios, e.g. "UTR → U535". */
 export function formatRoute(plant: string): string {
   return plant.includes(" to ") ? plant.replace(" to ", " → ") : plant;
+}
+
+/** Splits a lane-style plant route into source/destination; single-plant scenarios have no destination. */
+export function splitPlant(plant: string): { source: string; destination: string } {
+  if (plant.includes(" to ")) {
+    const [source, destination] = plant.split(" to ");
+    return { source, destination };
+  }
+  return { source: plant, destination: "NA" };
 }
 
 // ─── Filter option helpers ─────────────────────────────────────────────────────
