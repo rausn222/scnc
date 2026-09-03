@@ -4,7 +4,7 @@ import { useNav } from "../App";
 import { cbuData } from "./data";
 import {
   LayoutGrid, Brain, ChevronRight, ChevronDown,
-  ChevronLeft, Network, Activity, Cpu, Zap, ClipboardList,
+  ChevronLeft, Network, Activity, Cpu, Zap, ClipboardList, LayoutList,
 } from "lucide-react";
 
 const NAV_BG     = "#003087";
@@ -25,6 +25,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
   const isDashboard = nav.page === "dashboard" || nav.page === "cbu-detail";
   const isSCI       = nav.page === "supply-chain" || nav.page === "sci-detail";
   const isActivity  = nav.page === "action-detail";
+  const isNetworkSummary = nav.page === "network-summary";
   const [openPlanning, setOpenPlanning] = useState(true);
   const [openIntel,    setOpenIntel]    = useState(true);
 
@@ -128,12 +129,21 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
 
         {/* ── Planning section ── */}
         {collapsed ? (
-          <NavIconBtn
-            active={isDashboard}
-            icon={<LayoutGrid size={17} />}
-            title="National Level Transition Dashboard"
-            onClick={() => navigate({ page: "dashboard" })}
-          />
+          <>
+            <NavIconBtn
+              active={isDashboard}
+              icon={<LayoutGrid size={17} />}
+              title="National Level Transition Dashboard"
+              onClick={() => navigate({ page: "dashboard" })}
+            />
+            <NavIconBtn
+              active={isNetworkSummary}
+              icon={<LayoutList size={17} />}
+              title="Network Summary"
+              onClick={() => navigate({ page: "network-summary" })}
+              style={{ marginTop: 4 }}
+            />
+          </>
         ) : (
           <>
             <SectionHeader
@@ -155,6 +165,12 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
                     icon={<LayoutGrid size={15} />}
                     label="National Level Transition Dashboard"
                     onClick={() => navigate({ page: "dashboard" })}
+                  />
+                  <NavItemFull
+                    active={isNetworkSummary}
+                    icon={<LayoutList size={15} />}
+                    label="Network Summary"
+                    onClick={() => navigate({ page: "network-summary" })}
                   />
                 </motion.div>
               )}

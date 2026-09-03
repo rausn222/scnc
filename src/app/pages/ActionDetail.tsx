@@ -1,9 +1,16 @@
 import { useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { AlertTriangle, Download, RefreshCw, RotateCcw, Search } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  RefreshCw,
+  RotateCcw,
+  Search,
+} from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { FilterDropdown } from "../components/FilterDropdown";
 import { ActionsTable } from "../components/actions/ActionsTable";
+import { ActionsListTable } from "../components/actions/ActionsListTable";
 import {
   ACTIONS_DATA,
   MATERIAL_OPTIONS,
@@ -53,18 +60,26 @@ export default function ActionDetail() {
       ) {
         return false;
       }
-      if (filters.scenarioType !== "All" && row.scenarioType !== filters.scenarioType) return false;
+      if (
+        filters.scenarioType !== "All" &&
+        row.scenarioType !== filters.scenarioType
+      )
+        return false;
       if (filters.plant !== "All" && row.plant !== filters.plant) return false;
-      if (filters.material !== "All" && row.material !== filters.material) return false;
+      if (filters.material !== "All" && row.material !== filters.material)
+        return false;
       if (filters.owner !== "All" && row.owner !== filters.owner) return false;
-      if (filters.status !== "All" && row.status !== filters.status) return false;
+      if (filters.status !== "All" && row.status !== filters.status)
+        return false;
       return true;
     });
   }, [rows, search, filters]);
 
   const filtersActive =
     search.trim() !== "" ||
-    Object.entries(filters).some(([k, v]) => v !== EMPTY_FILTERS[k as keyof typeof EMPTY_FILTERS]);
+    Object.entries(filters).some(
+      ([k, v]) => v !== EMPTY_FILTERS[k as keyof typeof EMPTY_FILTERS],
+    );
 
   function clearFilters() {
     setSearch("");
@@ -75,14 +90,21 @@ export default function ActionDetail() {
     <div className="flex flex-col h-full overflow-hidden">
       <PageHeader
         title="Activity & Monitoring"
-        breadcrumbs={[{ label: "Dashboard" }, { label: "Activity & Monitoring" }]}
+        breadcrumbs={[
+          { label: "Dashboard" },
+          { label: "Activity & Monitoring" },
+        ]}
       >
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           title="Refresh"
           className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors cursor-pointer"
-          style={{ backgroundColor: "#ffffff24", color: "#fff", border: "1px solid #e5e7eb" }}
+          style={{
+            backgroundColor: "#ffffff24",
+            color: "#fff",
+            border: "1px solid #e5e7eb",
+          }}
         >
           <RefreshCw size={14} />
         </motion.button>
@@ -91,7 +113,11 @@ export default function ActionDetail() {
           whileTap={{ scale: 0.95 }}
           title="Export"
           className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors cursor-pointer"
-          style={{ backgroundColor: "#ffffff24", color: "#fff", border: "1px solid #e5e7eb" }}
+          style={{
+            backgroundColor: "#ffffff24",
+            color: "#fff",
+            border: "1px solid #e5e7eb",
+          }}
         >
           <Download size={14} />
         </motion.button>
@@ -123,28 +149,68 @@ export default function ActionDetail() {
         className="mx-5 mt-3 shrink-0 flex items-end flex-wrap gap-3 px-4 py-3 rounded-lg"
         style={{ backgroundColor: "#ffffff", border: "1px solid #e5e7eb" }}
       >
-        <div className="flex flex-col gap-1" style={{ maxWidth: 260, flex: "1 1 220px" }}>
-          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#374151" }}>
+        <div
+          className="flex flex-col gap-1"
+          style={{ maxWidth: 260, flex: "1 1 220px" }}
+        >
+          <span
+            className="text-[10px] font-semibold uppercase tracking-wide"
+            style={{ color: "#374151" }}
+          >
             Search
           </span>
           <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#9ca3af" }} />
+            <Search
+              size={13}
+              className="absolute left-3 top-1/2 -translate-y-1/2"
+              style={{ color: "#9ca3af" }}
+            />
             <input
               type="text"
               placeholder="Action ID, description or material…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 rounded-full text-xs focus:outline-none transition-all"
-              style={{ backgroundColor: "#f9fafb", border: "1px solid #d1d5db", color: "#111827" }}
+              style={{
+                backgroundColor: "#f9fafb",
+                border: "1px solid #d1d5db",
+                color: "#111827",
+              }}
             />
           </div>
         </div>
 
-        <FilterDropdown label="Scenario Type" value={filters.scenarioType} options={SCENARIO_TYPE_OPTIONS} onChange={(v) => setFilter("scenarioType", v)} />
-        <FilterDropdown label="Plant" value={filters.plant} options={PLANT_OPTIONS} onChange={(v) => setFilter("plant", v)} />
-        <FilterDropdown label="Material" value={filters.material} options={MATERIAL_OPTIONS} onChange={(v) => setFilter("material", v)} />
-        <FilterDropdown label="Owner" value={filters.owner} options={OWNER_OPTIONS} onChange={(v) => setFilter("owner", v)} maxWidth={160} />
-        <FilterDropdown label="Status" value={filters.status} options={STATUS_OPTIONS} onChange={(v) => setFilter("status", v)} />
+        <FilterDropdown
+          label="Scenario Type"
+          value={filters.scenarioType}
+          options={SCENARIO_TYPE_OPTIONS}
+          onChange={(v) => setFilter("scenarioType", v)}
+        />
+        <FilterDropdown
+          label="Plant"
+          value={filters.plant}
+          options={PLANT_OPTIONS}
+          onChange={(v) => setFilter("plant", v)}
+        />
+        <FilterDropdown
+          label="Material"
+          value={filters.material}
+          options={MATERIAL_OPTIONS}
+          onChange={(v) => setFilter("material", v)}
+        />
+        <FilterDropdown
+          label="Owner"
+          value={filters.owner}
+          options={OWNER_OPTIONS}
+          onChange={(v) => setFilter("owner", v)}
+          maxWidth={160}
+        />
+        <FilterDropdown
+          label="Status"
+          value={filters.status}
+          options={STATUS_OPTIONS}
+          onChange={(v) => setFilter("status", v)}
+        />
 
         <button
           type="button"
@@ -157,14 +223,18 @@ export default function ActionDetail() {
           Clear filters
         </button>
 
-        <span className="ml-auto text-xs shrink-0 pb-1.5" style={{ color: "#6b7280" }}>
+        <span
+          className="ml-auto text-xs shrink-0 pb-1.5"
+          style={{ color: "#6b7280" }}
+        >
           {filteredRows.length} of {rows.length} actions
         </span>
       </div>
 
       {/* Actions list */}
       <div className="flex-1 overflow-auto px-5 py-3">
-        <ActionsTable rows={filteredRows} onDecision={handleDecision} />
+        {/* <ActionsTable rows={filteredRows} onDecision={handleDecision} /> */}
+        <ActionsListTable rows={filteredRows} onDecision={handleDecision} />
       </div>
     </div>
   );

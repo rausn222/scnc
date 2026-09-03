@@ -6,6 +6,7 @@ import CBUDetail from "./pages/CBUDetail";
 import SupplyChainIntelligence from "./pages/SupplyChainIntelligence";
 import SCIDetail from "./pages/SCIDetail";
 import ActionDetail from "./pages/ActionDetail";
+import NetworkSummary from "./pages/NetworkSummary";
 import { cbuData } from "./components/data";
 import { Toaster } from "sonner";
 
@@ -16,7 +17,8 @@ export type NavState =
   | { page: "cbu-detail"; srNo: number }
   | { page: "supply-chain" }
   | { page: "sci-detail"; srNo?: number }
-  | { page: "action-detail" };
+  | { page: "action-detail" }
+  | { page: "network-summary" };
 
 export const NavContext = createContext<{
   nav: NavState;
@@ -80,6 +82,7 @@ export default function App() {
               {nav.page === "supply-chain"   && <SupplyChainIntelligence />}
               {nav.page === "sci-detail"     && <SCIDetail row={sciRow ?? null} />}
               {nav.page === "action-detail"  && <ActionDetail />}
+              {nav.page === "network-summary" && <NetworkSummary />}
             </motion.div>
           </AnimatePresence>
         </div>
