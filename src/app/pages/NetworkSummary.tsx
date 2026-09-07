@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   AlertTriangle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -22,10 +23,12 @@ import {
   STATUS_OPTIONS,
   fmtMoney,
   statusColor,
+  wasteComparisonColor,
   type NetworkRow,
 } from "../components/networkSummary/networkData";
 import { BusinessWasteSavingsChart } from "../components/networkSummary/BusinessWasteSavingsChart";
 import { NetworkDeviationModal } from "../components/networkSummary/NetworkDeviationModal";
+import { NetworkCbuBreakdown } from "../components/networkSummary/NetworkCbuBreakdown";
 
 const BORDER = "#e2e8f0";
 const HEAD_BG = "#003087";
@@ -167,7 +170,7 @@ export default function NetworkSummary() {
         </motion.button>
       </PageHeader>
 
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col gap-4 p-5">
           {/* Overview tiles */}
           <div className="grid grid-cols-4 gap-4 shrink-0">
@@ -402,19 +405,138 @@ function DualMetricTile({
 // ─── Network Details table ────────────────────────────────────────────────────
 
 const COLS = [
-  { label: "Network ID", width: 120 },
-  { label: "Project Name", width: 200 },
+  { label: "Project", width: 220 },
   { label: "Status", width: 100 },
   { label: "Selected Scenario", width: 190 },
+  { label: "Progress", width: 130 },
   { label: "Old CBU Count", width: 100 },
   { label: "Deviation Count", width: 110 },
-  { label: "Business Waste", width: 110 },
-  { label: "Total Savings", width: 110 },
+  { label: "Value at Risk", width: 120 },
+  { label: "Business Waste", width: 160 },
   { label: "Total Cost", width: 100 },
-  // { label: "Benefit", width: 150 },
   { label: "Production Stop Date", width: 150 },
   { label: "View Details", width: 90 },
+  { label: "", width: 40 },
 ];
+
+function ProgressBar({ pct }: { pct: number }) {
+  return (
+    <div className="flex items-center gap-2" title={`${pct}% complete`} style={{ minWidth: 90 }}>
+      <div className="flex-1 h-1.5 rounded-full" style={{ backgroundColor: "#e5edf9" }}>
+        <div
+          className="h-1.5 rounded-full"
+          style={{ width: `${pct}%`, backgroundColor: "#1565C0" }}
+        />
+      </div>
+      <span className="text-[10px] font-semibold tabular-nums shrink-0" style={{ color: "#374151", minWidth: 26 }}>
+        {pct}%
+      </span>
+    </div>
+  );
+}
+
+function BusinessWasteCell({ row }: { row: NetworkRow }) {
+  if (row.businessWaste == null) {
+    return <span style={{ color: "#9ca3af" }}>—</span>;
+  }
+  const color = wasteComparisonColor(row.businessWaste, row.savings);
+  return (
+    <span className="whitespace-nowrap">
+      <span className="font-bold tabular-nums" style={{ color }}>
+        {fmtMoney(row.businessWaste)}
+      </span>
+      {(row.savings ?? 0) > 0 && (
+        <span className="ml-1.5 font-semibold tabular-nums" style={{ color, fontSize: 10 }}>
+          ↓ {fmtMoney(row.savings)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// ─── Custom scrollbar: confined to the scrollable columns, never under the frozen Project column ──
+
+function TableScrollbar({
+  scrollRef,
+  offsetLeft,
+}: {
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  offsetLeft: number;
+}) {
+  const [metrics, setMetrics] = useState({ scrollLeft: 0, scrollWidth: 0, clientWidth: 0 });
+  const dragRef = useRef<{ startX: number; startScrollLeft: number } | null>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const measure = () =>
+      setMetrics({ scrollLeft: el.scrollLeft, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth });
+
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [scrollRef]);
+
+  const { scrollLeft, scrollWidth, clientWidth } = metrics;
+  if (scrollWidth <= clientWidth || clientWidth === 0) return null;
+
+  const trackWidth = Math.max(0, clientWidth - offsetLeft);
+  const thumbWidth = Math.max(24, (clientWidth / scrollWidth) * trackWidth);
+  const maxThumbLeft = trackWidth - thumbWidth;
+  const scrollableDist = scrollWidth - clientWidth;
+  const thumbLeft = scrollableDist > 0 ? (scrollLeft / scrollableDist) * maxThumbLeft : 0;
+
+  const onThumbMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startScrollLeft: scrollLeft };
+    const onMove = (ev: MouseEvent) => {
+      const el = scrollRef.current;
+      if (!dragRef.current || !el || maxThumbLeft <= 0) return;
+      const dx = ev.clientX - dragRef.current.startX;
+      el.scrollLeft = dragRef.current.startScrollLeft + dx * (scrollableDist / maxThumbLeft);
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const onTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.min(1, Math.max(0, (clickX - thumbWidth / 2) / (maxThumbLeft || 1)));
+    el.scrollLeft = ratio * scrollableDist;
+  };
+
+  return (
+    <div
+      data-testid="network-table-scrollbar-track"
+      className="absolute bottom-1 h-2 rounded-full cursor-pointer"
+      style={{ left: offsetLeft, right: 0, backgroundColor: "#EFF4FB" }}
+      onClick={onTrackClick}
+    >
+      <div
+        data-testid="network-table-scrollbar-thumb"
+        onMouseDown={onThumbMouseDown}
+        className="absolute top-0 h-2 rounded-full cursor-grab active:cursor-grabbing"
+        style={{ left: thumbLeft, width: thumbWidth, backgroundColor: "#1565C0" }}
+      />
+    </div>
+  );
+}
 
 function NetworkDetailsTable({
   rows,
@@ -425,6 +547,9 @@ function NetworkDetailsTable({
   onViewDetails: (row: NetworkRow) => void;
   onDeviationClick: (row: NetworkRow) => void;
 }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
   if (rows.length === 0) {
     return (
       <div
@@ -437,16 +562,16 @@ function NetworkDetailsTable({
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-auto">
-      <table className="text-xs border-collapse w-full" style={{ minWidth: 1500 }}>
+    <div className="relative">
+      <div ref={scrollRef} className="min-w-0 overflow-auto network-table-scroll-hide pb-3">
+        <table className="text-xs border-collapse w-full" style={{ minWidth: 1500 }}>
         <thead className="sticky top-0 z-20">
           <tr style={{ backgroundColor: HEAD_BG }} className="text-white">
             {COLS.map((col, i) => (
               <th
-                key={col.label}
+                key={col.label || `col-${i}`}
                 className="px-3 py-2.5 font-semibold whitespace-nowrap text-left"
                 style={{
-                  borderRight: i < COLS.length - 1 ? "1px solid rgba(255,255,255,0.15)" : undefined,
                   minWidth: col.width,
                   position: i === 0 ? "sticky" : undefined,
                   left: i === 0 ? 0 : undefined,
@@ -462,124 +587,164 @@ function NetworkDetailsTable({
         <tbody>
           {rows.map((row) => {
             const sc = statusColor(row.status);
+            const isExpanded = row.networkId === expandedId;
+            const rowBg = isExpanded ? "#EFF4FB" : "#ffffff";
+            const topBorder = isExpanded ? "2px solid #1565C0" : `1px solid ${BORDER}`;
+            const sideBorder = isExpanded ? "2px solid #1565C0" : undefined;
             return (
-              <tr
-                key={row.networkId}
-                className="hover:bg-blue-50 transition-colors"
-                style={{ backgroundColor: "#ffffff" }}
-              >
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#1565C0", position: "sticky", left: 0, zIndex: 10, backgroundColor: "#ffffff", boxShadow: "2px 0 4px rgba(15,23,42,0.08)" }}
+              <Fragment key={row.networkId}>
+                <tr
+                  className={isExpanded ? undefined : "hover:bg-blue-50 transition-colors"}
+                  style={{ backgroundColor: rowBg }}
                 >
-                  {row.networkId}
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#111827" }}
-                >
-                  {row.projectName}
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}` }}
-                >
-                  <span
-                    className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
-                    style={{ backgroundColor: sc.bg, color: sc.text }}
+                  <td
+                    className="px-3 py-2.5"
+                    style={{ borderTop: topBorder, borderLeft: sideBorder, position: "sticky", left: 0, zIndex: 10, backgroundColor: rowBg, boxShadow: "2px 0 4px rgba(15,23,42,0.08)" }}
                   >
-                    {row.status}
-                  </span>
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
-                >
-                  {row.selectedScenario}
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
-                >
-                  {row.oldCbuCount}
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{
-                    borderRight: `1px solid ${BORDER}`,
-                    borderTop: `1px solid ${BORDER}`,
-                    color: row.deviationCount ? "#1565C0" : "#9ca3af",
-                  }}
-                >
-                  {(row.deviationCount ?? 0) > 0 ? (
+                    <span
+                      className="text-[10px] font-semibold"
+                      style={{ color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      {row.networkId}
+                    </span>
+                    <div className="font-bold truncate" style={{ color: "#1565C0", maxWidth: 200 }}>
+                      {row.projectName}
+                    </div>
+                    <div className="text-[11px] truncate" style={{ color: "#94a3b8" }}>
+                      {row.bg}
+                    </div>
+                  </td>
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap"
+                    style={{ borderTop: topBorder }}
+                  >
+                    <span
+                      className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                      style={{ backgroundColor: sc.bg, color: sc.text }}
+                    >
+                      {row.status}
+                    </span>
+                  </td>
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap"
+                    style={{ borderTop: topBorder, color: "#374151" }}
+                  >
+                    {row.selectedScenario}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap"
+                    style={{ borderTop: topBorder }}
+                  >
+                    <ProgressBar pct={row.progressPct} />
+                  </td>
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap"
+                    style={{ borderTop: topBorder, color: "#374151" }}
+                  >
+                    {row.oldCbuCount}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap"
+                    style={{
+                      borderTop: topBorder,
+                      color: row.deviationCount ? "#1565C0" : "#9ca3af",
+                    }}
+                  >
+                    {(row.deviationCount ?? 0) > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => onDeviationClick(row)}
+                        title="View network deviations"
+                        className="text-xs font-normal underline decoration-dotted underline-offset-2 cursor-pointer"
+                        style={{ color: "#1565C0" }}
+                      >
+                        {row.deviationCount}
+                      </button>
+                    ) : (
+                      "NA"
+                    )}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap font-bold tabular-nums"
+                    style={{
+                      borderTop: topBorder,
+                      color: (row.deviationCount ?? 0) > 0 ? "#b91c1c" : "#9ca3af",
+                    }}
+                  >
+                    {(row.deviationCount ?? 0) > 0 ? fmtMoney(row.businessWaste) : "NA"}
+                  </td>
+                  <td
+                    className="px-3 py-2.5"
+                    style={{ borderTop: topBorder }}
+                  >
+                    <BusinessWasteCell row={row} />
+                  </td>
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap"
+                    style={{ borderTop: topBorder, color: "#374151" }}
+                  >
+                    {fmtMoney(row.totalCost)}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 whitespace-nowrap"
+                    style={{ borderTop: topBorder, color: "#374151" }}
+                  >
+                    {row.productionStopDate}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 text-left"
+                    style={{ borderTop: topBorder }}
+                  >
                     <button
                       type="button"
-                      onClick={() => onDeviationClick(row)}
-                      title="View network deviations"
-                      className="text-xs font-normal underline decoration-dotted underline-offset-2 cursor-pointer"
+                      onClick={() => onViewDetails(row)}
+                      title="View details"
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors cursor-pointer"
                       style={{ color: "#1565C0" }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = "#EDF5F4";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                      }}
                     >
-                      {row.deviationCount}
+                      <Eye size={15} />
                     </button>
-                  ) : (
-                    "NA"
-                  )}
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
-                >
-                  {fmtMoney(row.businessWaste)}
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
-                >
-                  {fmtMoney(row.savings)}
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
-                >
-                  {fmtMoney(row.totalCost)}
-                </td>
-                {/* <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
-                >
-                  {row.benefit}
-                </td> */}
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
-                >
-                  {row.productionStopDate}
-                </td>
-                <td
-                  className="px-3 py-2.5 text-left"
-                  style={{ borderTop: `1px solid ${BORDER}` }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onViewDetails(row)}
-                    title="View details"
-                    className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors cursor-pointer"
-                    style={{ color: "#1565C0" }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = "#EDF5F4";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                    }}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 text-left"
+                    style={{ borderTop: topBorder, borderRight: sideBorder }}
                   >
-                    <Eye size={15} />
-                  </button>
-                </td>
-              </tr>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(isExpanded ? null : row.networkId)}
+                      title={isExpanded ? `Collapse ${row.networkId}` : `Expand ${row.networkId}`}
+                      aria-expanded={isExpanded}
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-transform cursor-pointer"
+                      style={{ color: "#94a3b8", transform: isExpanded ? "rotate(180deg)" : undefined }}
+                    >
+                      <ChevronDown size={15} />
+                    </button>
+                  </td>
+                </tr>
+                {isExpanded && (
+                  <tr>
+                    <td
+                      colSpan={COLS.length}
+                      className="p-0"
+                      style={{ borderLeft: "2px solid #1565C0", borderRight: "2px solid #1565C0", borderBottom: "2px solid #1565C0" }}
+                    >
+                      <NetworkCbuBreakdown cbus={row.cbus} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             );
           })}
         </tbody>
       </table>
+      </div>
+      <TableScrollbar scrollRef={scrollRef} offsetLeft={COLS[0].width} />
     </div>
   );
 }

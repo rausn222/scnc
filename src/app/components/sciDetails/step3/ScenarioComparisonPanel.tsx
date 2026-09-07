@@ -153,7 +153,7 @@ export function ScenarioComparisonPanel({
               {scenarios.map((s) => (
                 <th
                   key={s.id}
-                  colSpan={2}
+                  colSpan={3}
                   className="px-2 py-2 text-center text-[11px] font-bold whitespace-nowrap"
                   style={{
                     backgroundColor: s.id === "no-action" ? "#374151" : C.navy,
@@ -201,6 +201,13 @@ export function ScenarioComparisonPanel({
                     className="px-2 py-2 text-center text-[9px] font-semibold uppercase tracking-wide"
                     style={{ color: "#64748b", borderLeft: "2px solid #d1d5db" }}
                   >
+                    Business Waste
+                    <div className="text-[8px] font-normal normal-case tracking-normal mt-0.5" style={{ color: "#94a3b8" }}>₹</div>
+                  </th>
+                  <th
+                    className="px-2 py-2 text-center text-[9px] font-semibold uppercase tracking-wide"
+                    style={{ color: "#64748b" }}
+                  >
                     Producible FG
                     <div className="text-[8px] font-normal normal-case tracking-normal mt-0.5" style={{ color: "#94a3b8" }}>FG EA</div>
                   </th>
@@ -219,7 +226,7 @@ export function ScenarioComparisonPanel({
             {filteredComps.length === 0 ? (
               <tr>
                 <td
-                  colSpan={FIXED_COLS + scenarios.length * 2}
+                  colSpan={FIXED_COLS + scenarios.length * 3}
                   className="px-4 py-8 text-center italic"
                   style={{ color: "#94a3b8" }}
                 >
@@ -248,7 +255,7 @@ export function ScenarioComparisonPanel({
                       return (
                         <td
                           key={s.id}
-                          colSpan={2}
+                          colSpan={3}
                           className="px-2 py-1.5 text-center"
                           style={{ borderLeft: "2px solid #d1d5db" }}
                         >
@@ -316,7 +323,22 @@ export function ScenarioComparisonPanel({
                           const isNil = !vals || vals.leftoverQty === "Nil";
                           return (
                             <React.Fragment key={s.id}>
-                              <td className="px-2 py-2.5 text-center tabular-nums font-semibold text-xs" style={{ color: "#374151", borderLeft: "2px solid #e2e8f0" }}>
+                              <td className="px-2 py-2.5 text-center align-top" style={{ borderLeft: "2px solid #e2e8f0" }}>
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <span
+                                    className="tabular-nums font-semibold text-xs"
+                                    style={{ color: s.wasteColor === "teal" ? C.teal : "#dc2626" }}
+                                  >
+                                    {s.businessWaste ?? "—"}
+                                  </span>
+                                  {s.wasteSavings && (
+                                    <span className="tabular-nums text-[10px] font-medium" style={{ color: C.teal }}>
+                                      ↓ {s.wasteSavings}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-2 py-2.5 text-center tabular-nums font-semibold text-xs" style={{ color: "#374151" }}>
                                 {vals?.producible ?? "—"}
                               </td>
                               <td className="px-2 py-2.5 text-center align-top">

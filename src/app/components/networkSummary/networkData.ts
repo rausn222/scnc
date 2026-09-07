@@ -11,6 +11,17 @@ export interface DeviationActionItem {
   status: DeviationStatus;
 }
 
+export interface NetworkCbuMapping {
+  id: string;
+  oldCode: string;
+  oldDescription: string;
+  /** Null when the old CBU is discontinued rather than replaced. */
+  newCode: string | null;
+  newDescription: string | null;
+  status: NetworkStatus;
+  valueAtRisk: number;
+}
+
 export interface NetworkRow {
   networkId: string;
   projectName: string;
@@ -26,6 +37,9 @@ export interface NetworkRow {
   productionStopDate: string;
   deviationCount: number | null;
   deviationDetails?: DeviationActionItem[];
+  /** Execution progress, 0-100 — considers total vs. completed actions across the network's CBUs. */
+  progressPct: number;
+  cbus: NetworkCbuMapping[];
 }
 
 // ─── Mock data (mirrors the Excel "Network details" reference sheet) ────────
@@ -45,6 +59,36 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "-",
     productionStopDate: "28th Sept 2026",
     deviationCount: null,
+    progressPct: 62,
+    cbus: [
+      {
+        id: "NET-2026-00001-1",
+        oldCode: "VAFA1R",
+        oldDescription: "Vaseline Aloe Fresh 100ml",
+        newCode: "VAFG1R",
+        newDescription: "Vaseline Aloe Fresh 100ml (Reformulated)",
+        status: "Active",
+        valueAtRisk: 820,
+      },
+      {
+        id: "NET-2026-00001-2",
+        oldCode: "VBLA2R",
+        oldDescription: "Vaseline Deep Moisture 200ml",
+        newCode: "VBLB2R",
+        newDescription: "Vaseline Deep Moisture 200ml (Reformulated)",
+        status: "Active",
+        valueAtRisk: 940,
+      },
+      {
+        id: "NET-2026-00001-3",
+        oldCode: "VBNN1R",
+        oldDescription: "Vaseline Cocoa Glow 100ml",
+        newCode: null,
+        newDescription: null,
+        status: "At Risk",
+        valueAtRisk: 696,
+      },
+    ],
   },
   {
     networkId: "NET-2026-00002",
@@ -55,11 +99,32 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "No action",
     oldCbuCount: 5,
     businessWaste: 1500,
-    savings: 1200,
+    savings: 0,
     totalCost: 0,
     benefit: "—",
     productionStopDate: "30th Sept 2026",
     deviationCount: null,
+    progressPct: 100,
+    cbus: [
+      {
+        id: "NET-2026-00002-1",
+        oldCode: "VCRM50",
+        oldDescription: "Vaseline Cream 50ml",
+        newCode: null,
+        newDescription: null,
+        status: "Complete",
+        valueAtRisk: 0,
+      },
+      {
+        id: "NET-2026-00002-2",
+        oldCode: "VCRM100",
+        oldDescription: "Vaseline Cream 100ml",
+        newCode: null,
+        newDescription: null,
+        status: "Complete",
+        valueAtRisk: 0,
+      },
+    ],
   },
   {
     networkId: "DRF-2026-00001",
@@ -75,6 +140,27 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "—",
     productionStopDate: "—",
     deviationCount: null,
+    progressPct: 0,
+    cbus: [
+      {
+        id: "DRF-2026-00001-1",
+        oldCode: "VLIP4G",
+        oldDescription: "Vaseline Lip Therapy 4g",
+        newCode: null,
+        newDescription: null,
+        status: "Draft",
+        valueAtRisk: 0,
+      },
+      {
+        id: "DRF-2026-00001-2",
+        oldCode: "VLIP7G",
+        oldDescription: "Vaseline Lip Therapy 7g",
+        newCode: null,
+        newDescription: null,
+        status: "Draft",
+        valueAtRisk: 0,
+      },
+    ],
   },
   {
     networkId: "NET-2026-00003",
@@ -104,6 +190,27 @@ export const NETWORK_DATA: NetworkRow[] = [
         status: "In Progress",
       },
     ],
+    progressPct: 35,
+    cbus: [
+      {
+        id: "NET-2026-00003-1",
+        oldCode: "PCR200",
+        oldDescription: "Personal Care Range 200ml",
+        newCode: "PCR250",
+        newDescription: "Personal Care Range 250ml (Reformulated)",
+        status: "At Risk",
+        valueAtRisk: 6200,
+      },
+      {
+        id: "NET-2026-00003-2",
+        oldCode: "PCR400",
+        oldDescription: "Personal Care Range 400ml",
+        newCode: null,
+        newDescription: null,
+        status: "At Risk",
+        valueAtRisk: 4300,
+      },
+    ],
   },
   {
     networkId: "NET-2026-00004",
@@ -119,6 +226,18 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "—",
     productionStopDate: "30th Sept 2026",
     deviationCount: null,
+    progressPct: 78,
+    cbus: [
+      {
+        id: "NET-2026-00004-1",
+        oldCode: "HCSH250",
+        oldDescription: "Hair Serum Shine 250ml",
+        newCode: "HCSH280",
+        newDescription: "Hair Serum Shine 280ml (Reformulated)",
+        status: "Active",
+        valueAtRisk: 500,
+      },
+    ],
   },
   {
     networkId: "NET-2026-00005",
@@ -154,6 +273,27 @@ export const NETWORK_DATA: NetworkRow[] = [
         status: "Blocked",
       },
     ],
+    progressPct: 28,
+    cbus: [
+      {
+        id: "NET-2026-00005-1",
+        oldCode: "NTBR120",
+        oldDescription: "Nutrition Bar Classic 120g",
+        newCode: null,
+        newDescription: null,
+        status: "At Risk",
+        valueAtRisk: 2300,
+      },
+      {
+        id: "NET-2026-00005-2",
+        oldCode: "NTBR150",
+        oldDescription: "Nutrition Bar Protein 150g",
+        newCode: "NTBR150V",
+        newDescription: "Nutrition Bar Protein 150g (Vegan)",
+        status: "At Risk",
+        valueAtRisk: 1600,
+      },
+    ],
   },
   {
     networkId: "NET-2026-00006",
@@ -169,6 +309,27 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "—",
     productionStopDate: "31st Jul 2026",
     deviationCount: null,
+    progressPct: 100,
+    cbus: [
+      {
+        id: "NET-2026-00006-1",
+        oldCode: "SKCL50",
+        oldDescription: "Skin Classic Cream 50g",
+        newCode: "SKCL50R",
+        newDescription: "Skin Classic Cream 50g (Reformulated)",
+        status: "Complete",
+        valueAtRisk: 0,
+      },
+      {
+        id: "NET-2026-00006-2",
+        oldCode: "SKCL100",
+        oldDescription: "Skin Classic Cream 100g",
+        newCode: "SKCL100R",
+        newDescription: "Skin Classic Cream 100g (Reformulated)",
+        status: "Complete",
+        valueAtRisk: 0,
+      },
+    ],
   },
   {
     networkId: "NET-2026-00007",
@@ -184,6 +345,18 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "—",
     productionStopDate: "15th Oct 2026",
     deviationCount: null,
+    progressPct: 55,
+    cbus: [
+      {
+        id: "NET-2026-00007-1",
+        oldCode: "PSRM30",
+        oldDescription: "Premium Serum 30ml",
+        newCode: "PSRM30P",
+        newDescription: "Premium Serum 30ml (Premium Pack)",
+        status: "Active",
+        valueAtRisk: 950,
+      },
+    ],
   },
   {
     networkId: "DRF-2026-00002",
@@ -199,6 +372,27 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "—",
     productionStopDate: "—",
     deviationCount: null,
+    progressPct: 0,
+    cbus: [
+      {
+        id: "DRF-2026-00002-1",
+        oldCode: "HCBN500",
+        oldDescription: "Home Care Bundle 500ml",
+        newCode: null,
+        newDescription: null,
+        status: "Draft",
+        valueAtRisk: 0,
+      },
+      {
+        id: "DRF-2026-00002-2",
+        oldCode: "HCBN1L",
+        oldDescription: "Home Care Bundle 1L",
+        newCode: null,
+        newDescription: null,
+        status: "Draft",
+        valueAtRisk: 0,
+      },
+    ],
   },
   {
     networkId: "NET-2026-00008",
@@ -220,6 +414,18 @@ export const NETWORK_DATA: NetworkRow[] = [
         description: "Production plan change at source plant",
         owner: "Factory Planner",
         status: "In Progress",
+      },
+    ],
+    progressPct: 82,
+    cbus: [
+      {
+        id: "NET-2026-00008-1",
+        oldCode: "VCBL190",
+        oldDescription: "VitaCare Body Lotion 190ml",
+        newCode: "VCBL250",
+        newDescription: "VitaCare Body Lotion 250ml (Reformulated)",
+        status: "Active",
+        valueAtRisk: 1400,
       },
     ],
   },
@@ -265,4 +471,17 @@ export function fmtMoney(n: number | null): string {
   if (n === null) return "—";
   if (n === 0) return "0";
   return `₹${n.toLocaleString("en-IN")}`;
+}
+
+/** Business-waste-vs-"No action" comparison tier, mirroring the Scenario Comparison
+ * report's reduction-percentage color coding (>=40% teal / 20-39% amber / <20% red). */
+export function wasteComparisonColor(businessWaste: number | null, savings: number | null): string {
+  const waste = businessWaste ?? 0;
+  const saved = savings ?? 0;
+  if (saved <= 0) return "#b91c1c";
+  const noActionWaste = waste + saved;
+  const pct = noActionWaste > 0 ? (saved / noActionWaste) * 100 : 0;
+  if (pct >= 40) return "#00695C";
+  if (pct >= 20) return "#b45309";
+  return "#b91c1c";
 }

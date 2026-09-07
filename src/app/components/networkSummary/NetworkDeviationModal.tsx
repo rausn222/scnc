@@ -12,7 +12,7 @@ interface Props {
 
 export function NetworkDeviationModal({ row, onClose }: Props) {
   const { navigate } = useNav();
-  const progressPct = 50;
+  const progressPct = row.progressPct;
   const actionItems = row.deviationDetails ?? [];
 
   return (

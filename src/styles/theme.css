@@ -176,6 +176,10 @@
 .actions-list-scroll::-webkit-scrollbar-thumb { background: #1565C0; border: 1px solid #EFF4FB; border-radius: 2px; }
 .actions-list-scroll::-webkit-scrollbar-thumb:hover { background: #003087; }
 
+/* Native scrollbar hidden — a custom blue thumb confined to the scrollable columns replaces it. */
+.network-table-scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
+.network-table-scroll-hide::-webkit-scrollbar { display: none; }
+
 /* Light background — replaces dark grid */
 .ai-grid-bg {
   background-color: #EFF4FB;
