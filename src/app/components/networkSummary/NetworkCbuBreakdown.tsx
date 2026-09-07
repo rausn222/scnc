@@ -1,6 +1,6 @@
-import { fmtMoney, statusColor, type NetworkCbuMapping } from "./networkData";
+import { STICKY_COL_WIDTH, type NetworkCbuMapping } from "./networkData";
 
-const CBU_GRID_COLS = "minmax(160px,1.3fr) minmax(160px,1.3fr) 110px minmax(120px,1fr)";
+const CBU_GRID_COLS = `${STICKY_COL_WIDTH}px 220px`;
 const NAVY = "#003087";
 const GREEN = "#15803d";
 const RED = "#b91c1c";
@@ -8,33 +8,30 @@ const RED = "#b91c1c";
 export function NetworkCbuBreakdown({ cbus }: Readonly<{ cbus: NetworkCbuMapping[] }>) {
   if (cbus.length === 0) {
     return (
-      <div className="px-4 py-4 text-center text-xs" style={{ backgroundColor: "#fafbfe", color: "#94a3b8" }}>
+      <div className="px-4 py-4 text-center text-xs" style={{ color: "#94a3b8" }}>
         No CBU-level data available for this network.
       </div>
     );
   }
 
   return (
-    <div style={{ backgroundColor: "#fafbfe" }}>
+    <div style={{ position: "sticky", left: 0, width: "fit-content", backgroundColor: "#ffffff" }}>
       <div
-        className="grid items-center px-4 py-2 text-[10px] font-bold uppercase tracking-wide"
+        className="grid items-center py-2 text-[10px] font-bold uppercase tracking-wide"
         style={{ gridTemplateColumns: CBU_GRID_COLS, color: NAVY, borderTop: "1px solid #dbe6f6", borderBottom: "1px solid #dbe6f6" }}
       >
-        <span>Old CBU</span>
-        <span>→ New CBU</span>
-        <span>Status</span>
-        <span className="text-right">Value at Risk</span>
+        <span className="px-4">Old CBU</span>
+        <span className="px-3">→ New CBU</span>
       </div>
 
       {cbus.map((c) => {
-        const sc = statusColor(c.status);
         return (
           <div
             key={c.id}
-            className="grid items-center px-4 py-3"
+            className="grid items-center py-3"
             style={{ gridTemplateColumns: CBU_GRID_COLS, borderBottom: "1px solid #dbe6f6" }}
           >
-            <div className="min-w-0">
+            <div className="min-w-0 px-4">
               <p className="text-xs font-bold truncate" style={{ color: NAVY }}>
                 {c.oldCode}
               </p>
@@ -43,7 +40,7 @@ export function NetworkCbuBreakdown({ cbus }: Readonly<{ cbus: NetworkCbuMapping
               </p>
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 px-3">
               {c.newCode ? (
                 <>
                   <p className="text-xs font-bold truncate" style={{ color: GREEN }}>
@@ -59,19 +56,6 @@ export function NetworkCbuBreakdown({ cbus }: Readonly<{ cbus: NetworkCbuMapping
                 </p>
               )}
             </div>
-
-            <div>
-              <span
-                className="px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
-                style={{ backgroundColor: sc.bg, color: sc.text }}
-              >
-                {c.status}
-              </span>
-            </div>
-
-            <span className="text-xs font-bold text-right" style={{ color: c.status === "At Risk" ? RED : NAVY }}>
-              {fmtMoney(c.valueAtRisk)}
-            </span>
           </div>
         );
       })}

@@ -1,3 +1,9 @@
+// ─── Shared table layout ────────────────────────────────────────────────────────
+
+/** Width of the sticky first column, shared by the main table and the expanded CBU breakdown so their dividers line up. */
+export const STICKY_COL_WIDTH = 220;
+export const STICKY_COL_DIVIDER = "1px solid #cbd5e1";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type NetworkStatus = "Active" | "Complete" | "Draft" | "At Risk";

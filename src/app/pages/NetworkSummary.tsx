@@ -2,12 +2,13 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   AlertTriangle,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
   Eye,
+  EyeOff,
   Layers,
+  ListFilter,
   Network,
   RefreshCw,
   RotateCcw,
@@ -15,19 +16,19 @@ import {
   Wallet,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
-import { FilterDropdown } from "../components/FilterDropdown";
+import { MultiSelectFilterDropdown } from "../components/FilterDropdown";
 import { useNav } from "../App";
 import {
   NETWORK_DATA,
-  SCENARIO_OPTIONS,
-  STATUS_OPTIONS,
+  STICKY_COL_DIVIDER,
+  STICKY_COL_WIDTH,
   fmtMoney,
   statusColor,
   wasteComparisonColor,
   type NetworkRow,
 } from "../components/networkSummary/networkData";
 import { BusinessWasteSavingsChart } from "../components/networkSummary/BusinessWasteSavingsChart";
-import { NetworkDeviationModal } from "../components/networkSummary/NetworkDeviationModal";
+import { NetworkDeviationBreakdown } from "../components/networkSummary/NetworkDeviationBreakdown";
 import { NetworkCbuBreakdown } from "../components/networkSummary/NetworkCbuBreakdown";
 
 const BORDER = "#e2e8f0";
@@ -35,10 +36,43 @@ const HEAD_BG = "#003087";
 const ROWS_PER_PAGE_OPTIONS = [5, 10, 20];
 
 const EMPTY_FILTERS = {
-  networkId: "",
-  status: "All",
-  selectedScenario: "All",
+  status: [] as string[],
+  selectedScenario: [] as string[],
+  bg: [] as string[],
+  networkId: [] as string[],
+  projectName: [] as string[],
 };
+type FilterId = keyof typeof EMPTY_FILTERS;
+
+const FILTER_CONTROLS: Array<readonly [FilterId, string]> = [
+  ["status", "Status"],
+  ["selectedScenario", "Selected Scenario"],
+  ["bg", "Business Group"],
+  ["networkId", "Network ID"],
+  ["projectName", "Project"],
+];
+
+function filterWidth(id: FilterId) {
+  if (id === "selectedScenario") return 200;
+  if (id === "projectName") return 190;
+  if (id === "networkId") return 160;
+  return 140;
+}
+
+function filterValue(row: NetworkRow, id: FilterId): string {
+  switch (id) {
+    case "status":
+      return row.status;
+    case "selectedScenario":
+      return row.selectedScenario;
+    case "bg":
+      return row.bg;
+    case "networkId":
+      return row.networkId;
+    case "projectName":
+      return row.projectName;
+  }
+}
 
 export default function NetworkSummary() {
   const { navigate } = useNav();
@@ -46,10 +80,41 @@ export default function NetworkSummary() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [deviationRow, setDeviationRow] = useState<NetworkRow | null>(null);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const [hiddenFilters, setHiddenFilters] = useState<Set<string>>(
+    new Set(["networkId", "projectName"]),
+  );
+  const moreFiltersRef = useRef<HTMLDivElement>(null);
 
-  function setFilter(id: keyof typeof EMPTY_FILTERS, value: string) {
+  useEffect(() => {
+    if (!moreFiltersOpen) return;
+    const closeMoreFilters = (event: MouseEvent) => {
+      if (!moreFiltersRef.current?.contains(event.target as Node)) {
+        setMoreFiltersOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeMoreFilters);
+    return () => document.removeEventListener("mousedown", closeMoreFilters);
+  }, [moreFiltersOpen]);
+
+  function setFilter(id: FilterId, value: string[]) {
     setFilters((prev) => ({ ...prev, [id]: value }));
+  }
+
+  function dependentOptions(id: FilterId): string[] {
+    const compatibleRows = NETWORK_DATA.filter((row) =>
+      Object.entries(filters).every(
+        ([filterId, values]) =>
+          filterId === id ||
+          values.length === 0 ||
+          values.includes(filterValue(row, filterId as FilterId)),
+      ),
+    );
+    const available = new Set([
+      ...compatibleRows.map((row) => filterValue(row, id)),
+      ...filters[id],
+    ]);
+    return Array.from(available).sort((a, b) => a.localeCompare(b));
   }
 
   const filteredRows = useMemo(() => {
@@ -61,11 +126,19 @@ export default function NetworkSummary() {
         !row.projectName.toLowerCase().includes(q)
       )
         return false;
-      if (filters.status !== "All" && row.status !== filters.status)
+      if (filters.status.length && !filters.status.includes(row.status))
         return false;
       if (
-        filters.selectedScenario !== "All" &&
-        row.selectedScenario !== filters.selectedScenario
+        filters.selectedScenario.length &&
+        !filters.selectedScenario.includes(row.selectedScenario)
+      )
+        return false;
+      if (filters.bg.length && !filters.bg.includes(row.bg)) return false;
+      if (filters.networkId.length && !filters.networkId.includes(row.networkId))
+        return false;
+      if (
+        filters.projectName.length &&
+        !filters.projectName.includes(row.projectName)
       )
         return false;
       return true;
@@ -73,10 +146,7 @@ export default function NetworkSummary() {
   }, [search, filters]);
 
   const filtersActive =
-    search.trim() !== "" ||
-    Object.entries(filters).some(
-      ([k, v]) => v !== EMPTY_FILTERS[k as keyof typeof EMPTY_FILTERS],
-    );
+    search.trim() !== "" || Object.values(filters).some((values) => values.length > 0);
 
   function clearFilters() {
     setSearch("");
@@ -123,10 +193,11 @@ export default function NetworkSummary() {
     0,
   );
 
-  const topBusinessWasteData = NETWORK_DATA.filter(
-    (r): r is NetworkRow & { businessWaste: number; savings: number } =>
-      r.businessWaste != null && r.savings != null,
-  )
+  const topBusinessWasteData = filteredRows
+    .filter(
+      (r): r is NetworkRow & { businessWaste: number; savings: number } =>
+        r.businessWaste != null && r.savings != null,
+    )
     .sort((a, b) => b.businessWaste - a.businessWaste)
     .slice(0, 10)
     .map((r) => ({
@@ -206,6 +277,147 @@ export default function NetworkSummary() {
             />
           </div>
 
+          {/* Filters */}
+          <div
+            className="rounded-lg flex items-end flex-wrap gap-2 px-4 py-3 shrink-0"
+            style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
+          >
+            <div className="flex flex-col gap-1" style={{ maxWidth: 220, flex: "1 1 200px" }}>
+              <span
+                className="text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: "#374151" }}
+              >
+                Search
+              </span>
+              <div className="relative">
+                <Search
+                  size={13}
+                  className="absolute left-3 top-1/2 -translate-y-1/2"
+                  style={{ color: "#9ca3af" }}
+                />
+                <input
+                  type="text"
+                  placeholder="Network ID or Project name…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-full text-xs focus:outline-none transition-all"
+                  style={{ backgroundColor: "#f9fafb", border: "1px solid #d1d5db", color: "#111827" }}
+                />
+              </div>
+            </div>
+
+            {FILTER_CONTROLS.filter(([id]) => !hiddenFilters.has(id)).map(([id, label]) => (
+              <MultiSelectFilterDropdown
+                key={id}
+                label={label}
+                options={dependentOptions(id).map((option) => ({ label: option, value: option }))}
+                selected={filters[id]}
+                onChange={(value) => setFilter(id, value)}
+                maxWidth={filterWidth(id)}
+              />
+            ))}
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              disabled={!filtersActive}
+              title="Clear filters"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ color: "#1565C0", border: "1px solid #d1d5db" }}
+            >
+              <RotateCcw size={11} />
+              Clear filters
+            </button>
+
+            <div ref={moreFiltersRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setMoreFiltersOpen((v) => !v)}
+                aria-expanded={moreFiltersOpen}
+                title="More filters"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer"
+                style={{
+                  color: "#1565C0",
+                  border: "1px solid #d1d5db",
+                  backgroundColor: moreFiltersOpen ? "#eff6ff" : "#ffffff",
+                }}
+              >
+                <ListFilter size={11} />
+                More filters
+              </button>
+              {moreFiltersOpen && (
+                <div
+                  className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-xl shadow-xl"
+                  style={{ backgroundColor: "#ffffff", border: "1px solid rgba(21,101,192,0.2)" }}
+                >
+                  <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #e5e7eb" }}>
+                    <div className="flex items-center gap-2 text-xs font-bold" style={{ color: "#003087" }}>
+                      <ListFilter size={13} style={{ color: "#1565C0" }} /> Manage Filters
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setHiddenFilters(new Set())}
+                      className="flex items-center gap-1 text-[10px] cursor-pointer"
+                      style={{ color: "#1565C0" }}
+                    >
+                      <RotateCcw size={10} /> Reset
+                    </button>
+                  </div>
+                  <div className="px-4 py-2 text-[9px] uppercase tracking-wide" style={{ color: "#6b7280", borderBottom: "1px solid #f3f4f6" }}>
+                    Toggle to show/hide filters
+                  </div>
+                  <div className="max-h-56 overflow-y-auto py-1">
+                    {FILTER_CONTROLS.map(([id, label]) => {
+                      const visible = !hiddenFilters.has(id);
+                      return (
+                        <div
+                          key={id}
+                          className="flex items-center gap-2 px-4 py-1.5"
+                          style={{ color: visible ? "#111827" : "#9ca3af", textDecoration: visible ? "none" : "line-through" }}
+                        >
+                          <span className="flex-1 text-xs">{label}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setHiddenFilters((previous) => {
+                                const next = new Set(previous);
+                                next.has(id) ? next.delete(id) : next.add(id);
+                                return next;
+                              })
+                            }
+                            className="cursor-pointer"
+                            title={visible ? "Hide filter" : "Show filter"}
+                            aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+                            style={{ color: "#1565C0" }}
+                          >
+                            {visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: "1px solid #e5e7eb" }}>
+                    <span className="text-[9px]" style={{ color: "#6b7280" }}>
+                      {FILTER_CONTROLS.length - hiddenFilters.size} shown · {hiddenFilters.size} hidden
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setMoreFiltersOpen(false)}
+                      className="rounded-lg px-3 py-1 text-xs cursor-pointer"
+                      style={{ backgroundColor: "#EDF5FA", color: "#374151", border: "1px solid rgba(21,101,192,0.2)" }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <span className="ml-auto text-xs shrink-0 pb-1.5" style={{ color: "#6b7280" }}>
+              {filteredRows.length} of {NETWORK_DATA.length} networks
+            </span>
+          </div>
+
           {/* Business waste and savings */}
           <BusinessWasteSavingsChart data={topBusinessWasteData} />
 
@@ -220,70 +432,10 @@ export default function NetworkSummary() {
               </h3>
             </div>
 
-            {/* Filters */}
-            <div
-              className="flex items-end flex-wrap gap-3 px-4 py-3"
-              style={{ borderBottom: `1px solid ${BORDER}` }}
-            >
-              <div className="flex flex-col gap-1" style={{ maxWidth: 220, flex: "1 1 200px" }}>
-                <span
-                  className="text-[10px] font-semibold uppercase tracking-wide"
-                  style={{ color: "#374151" }}
-                >
-                  Search
-                </span>
-                <div className="relative">
-                  <Search
-                    size={13}
-                    className="absolute left-3 top-1/2 -translate-y-1/2"
-                    style={{ color: "#9ca3af" }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Network ID or Project name…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 rounded-full text-xs focus:outline-none transition-all"
-                    style={{ backgroundColor: "#f9fafb", border: "1px solid #d1d5db", color: "#111827" }}
-                  />
-                </div>
-              </div>
-
-              <FilterDropdown
-                label="Status"
-                value={filters.status}
-                options={STATUS_OPTIONS}
-                onChange={(v) => setFilter("status", v)}
-              />
-              <FilterDropdown
-                label="Selected Scenario"
-                value={filters.selectedScenario}
-                options={SCENARIO_OPTIONS}
-                onChange={(v) => setFilter("selectedScenario", v)}
-                maxWidth={200}
-              />
-
-              <button
-                type="button"
-                onClick={clearFilters}
-                disabled={!filtersActive}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ color: "#1565C0", border: "1px solid #d1d5db" }}
-              >
-                <RotateCcw size={11} />
-                Clear filters
-              </button>
-
-              <span className="ml-auto text-xs shrink-0 pb-1.5" style={{ color: "#6b7280" }}>
-                {filteredRows.length} of {NETWORK_DATA.length} networks
-              </span>
-            </div>
-
             {/* Table */}
             <NetworkDetailsTable
               rows={paginatedRows}
               onViewDetails={handleViewDetails}
-              onDeviationClick={(row) => setDeviationRow(row)}
             />
 
             {/* Pagination */}
@@ -297,10 +449,6 @@ export default function NetworkSummary() {
           </div>
         </div>
       </div>
-
-      {deviationRow && (
-        <NetworkDeviationModal row={deviationRow} onClose={() => setDeviationRow(null)} />
-      )}
     </div>
   );
 }
@@ -405,7 +553,7 @@ function DualMetricTile({
 // ─── Network Details table ────────────────────────────────────────────────────
 
 const COLS = [
-  { label: "Project", width: 220 },
+  { label: "Project", width: STICKY_COL_WIDTH },
   { label: "Status", width: 100 },
   { label: "Selected Scenario", width: 190 },
   { label: "Progress", width: 130 },
@@ -416,7 +564,6 @@ const COLS = [
   { label: "Total Cost", width: 100 },
   { label: "Production Stop Date", width: 150 },
   { label: "View Details", width: 90 },
-  { label: "", width: 40 },
 ];
 
 function ProgressBar({ pct }: { pct: number }) {
@@ -538,16 +685,16 @@ function TableScrollbar({
   );
 }
 
+type ExpandedPanel = { id: string; type: "cbu" | "deviation" };
+
 function NetworkDetailsTable({
   rows,
   onViewDetails,
-  onDeviationClick,
 }: {
   rows: NetworkRow[];
   onViewDetails: (row: NetworkRow) => void;
-  onDeviationClick: (row: NetworkRow) => void;
 }) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<ExpandedPanel | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   if (rows.length === 0) {
@@ -577,6 +724,7 @@ function NetworkDetailsTable({
                   left: i === 0 ? 0 : undefined,
                   zIndex: i === 0 ? 31 : undefined,
                   backgroundColor: HEAD_BG,
+                  borderRight: i === 0 ? STICKY_COL_DIVIDER : undefined,
                 }}
               >
                 {col.label}
@@ -587,7 +735,8 @@ function NetworkDetailsTable({
         <tbody>
           {rows.map((row) => {
             const sc = statusColor(row.status);
-            const isExpanded = row.networkId === expandedId;
+            const isExpanded = row.networkId === expanded?.id;
+            const expandedType = isExpanded ? expanded?.type : null;
             const rowBg = isExpanded ? "#EFF4FB" : "#ffffff";
             const topBorder = isExpanded ? "2px solid #1565C0" : `1px solid ${BORDER}`;
             const sideBorder = isExpanded ? "2px solid #1565C0" : undefined;
@@ -599,7 +748,7 @@ function NetworkDetailsTable({
                 >
                   <td
                     className="px-3 py-2.5"
-                    style={{ borderTop: topBorder, borderLeft: sideBorder, position: "sticky", left: 0, zIndex: 10, backgroundColor: rowBg, boxShadow: "2px 0 4px rgba(15,23,42,0.08)" }}
+                    style={{ borderTop: topBorder, borderLeft: sideBorder, borderRight: STICKY_COL_DIVIDER, position: "sticky", left: 0, zIndex: 10, backgroundColor: rowBg }}
                   >
                     <span
                       className="text-[10px] font-semibold"
@@ -641,7 +790,22 @@ function NetworkDetailsTable({
                     className="px-3 py-2.5 whitespace-nowrap"
                     style={{ borderTop: topBorder, color: "#374151" }}
                   >
-                    {row.oldCbuCount}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpanded(
+                          isExpanded && expandedType === "cbu"
+                            ? null
+                            : { id: row.networkId, type: "cbu" },
+                        )
+                      }
+                      title="View old CBU list"
+                      aria-expanded={isExpanded && expandedType === "cbu"}
+                      className="text-xs font-normal underline decoration-dotted underline-offset-2 cursor-pointer"
+                      style={{ color: "#1565C0" }}
+                    >
+                      {row.oldCbuCount}
+                    </button>
                   </td>
                   <td
                     className="px-3 py-2.5 whitespace-nowrap"
@@ -653,8 +817,15 @@ function NetworkDetailsTable({
                     {(row.deviationCount ?? 0) > 0 ? (
                       <button
                         type="button"
-                        onClick={() => onDeviationClick(row)}
+                        onClick={() =>
+                          setExpanded(
+                            isExpanded && expandedType === "deviation"
+                              ? null
+                              : { id: row.networkId, type: "deviation" },
+                          )
+                        }
                         title="View network deviations"
+                        aria-expanded={isExpanded && expandedType === "deviation"}
                         className="text-xs font-normal underline decoration-dotted underline-offset-2 cursor-pointer"
                         style={{ color: "#1565C0" }}
                       >
@@ -693,7 +864,7 @@ function NetworkDetailsTable({
                   </td>
                   <td
                     className="px-3 py-2.5 text-left"
-                    style={{ borderTop: topBorder }}
+                    style={{ borderTop: topBorder, borderRight: sideBorder }}
                   >
                     <button
                       type="button"
@@ -711,21 +882,6 @@ function NetworkDetailsTable({
                       <Eye size={15} />
                     </button>
                   </td>
-                  <td
-                    className="px-3 py-2.5 text-left"
-                    style={{ borderTop: topBorder, borderRight: sideBorder }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setExpandedId(isExpanded ? null : row.networkId)}
-                      title={isExpanded ? `Collapse ${row.networkId}` : `Expand ${row.networkId}`}
-                      aria-expanded={isExpanded}
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-transform cursor-pointer"
-                      style={{ color: "#94a3b8", transform: isExpanded ? "rotate(180deg)" : undefined }}
-                    >
-                      <ChevronDown size={15} />
-                    </button>
-                  </td>
                 </tr>
                 {isExpanded && (
                   <tr>
@@ -734,7 +890,11 @@ function NetworkDetailsTable({
                       className="p-0"
                       style={{ borderLeft: "2px solid #1565C0", borderRight: "2px solid #1565C0", borderBottom: "2px solid #1565C0" }}
                     >
-                      <NetworkCbuBreakdown cbus={row.cbus} />
+                      {expandedType === "cbu" ? (
+                        <NetworkCbuBreakdown cbus={row.cbus} />
+                      ) : (
+                        <NetworkDeviationBreakdown row={row} />
+                      )}
                     </td>
                   </tr>
                 )}
