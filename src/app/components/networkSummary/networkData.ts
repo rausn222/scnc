@@ -2,6 +2,14 @@
 
 export type NetworkStatus = "Active" | "Complete" | "Draft" | "At Risk";
 export type BusinessGroup = "Personal Care" | "Beauty & Wellbeing" | "Foods" | "Home Care";
+export type DeviationStatus = "Completed" | "In Progress" | "Pending" | "Blocked";
+
+export interface DeviationActionItem {
+  actionId: string;
+  description: string;
+  owner: string;
+  status: DeviationStatus;
+}
 
 export interface NetworkRow {
   networkId: string;
@@ -17,6 +25,7 @@ export interface NetworkRow {
   benefit: string;
   productionStopDate: string;
   deviationCount: number | null;
+  deviationDetails?: DeviationActionItem[];
 }
 
 // ─── Mock data (mirrors the Excel "Network details" reference sheet) ────────
@@ -81,6 +90,20 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "—",
     productionStopDate: "20th Oct 2026",
     deviationCount: 2,
+    deviationDetails: [
+      {
+        actionId: "DEV-00003-1",
+        description: "Production plan change at destination plant",
+        owner: "Destination Factory Planner",
+        status: "Blocked",
+      },
+      {
+        actionId: "DEV-00003-2",
+        description: "Action item delay — Source Plant Approval overdue",
+        owner: "Source Factory Planner",
+        status: "In Progress",
+      },
+    ],
   },
   {
     networkId: "NET-2026-00004",
@@ -111,6 +134,26 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "—",
     productionStopDate: "31st Oct 2026",
     deviationCount: 3,
+    deviationDetails: [
+      {
+        actionId: "DEV-00005-1",
+        description: "Sales index change impacting demand forecast",
+        owner: "Supply Planner",
+        status: "In Progress",
+      },
+      {
+        actionId: "DEV-00005-2",
+        description: "Supplier inventory change — MOQ exception pending",
+        owner: "Procurement Buyer",
+        status: "Pending",
+      },
+      {
+        actionId: "DEV-00005-3",
+        description: "Action item delay — Procurement Approval overdue",
+        owner: "Procurement Team",
+        status: "Blocked",
+      },
+    ],
   },
   {
     networkId: "NET-2026-00006",
@@ -171,6 +214,14 @@ export const NETWORK_DATA: NetworkRow[] = [
     benefit: "—",
     productionStopDate: "31st Aug 2026",
     deviationCount: 1,
+    deviationDetails: [
+      {
+        actionId: "DEV-00008-1",
+        description: "Production plan change at source plant",
+        owner: "Factory Planner",
+        status: "In Progress",
+      },
+    ],
   },
 ];
 
@@ -193,6 +244,19 @@ export function statusColor(status: NetworkStatus): { bg: string; text: string }
     case "Draft":
       return { bg: "#f3f4f6", text: "#6b7280" };
     case "At Risk":
+      return { bg: "#fee2e2", text: "#b91c1c" };
+  }
+}
+
+export function deviationStatusColor(status: DeviationStatus): { bg: string; text: string } {
+  switch (status) {
+    case "Completed":
+      return { bg: "#dcfce7", text: "#15803d" };
+    case "In Progress":
+      return { bg: "#dbeafe", text: "#1565C0" };
+    case "Pending":
+      return { bg: "#f3f4f6", text: "#6b7280" };
+    case "Blocked":
       return { bg: "#fee2e2", text: "#b91c1c" };
   }
 }

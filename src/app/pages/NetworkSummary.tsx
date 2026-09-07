@@ -11,6 +11,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Wallet,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { FilterDropdown } from "../components/FilterDropdown";
@@ -106,6 +107,18 @@ export default function NetworkSummary() {
   const networksWithDeviations = NETWORK_DATA.filter(
     (r) => (r.deviationCount ?? 0) > 0,
   ).length;
+  const totalBusinessWaste = NETWORK_DATA.reduce(
+    (sum, r) => sum + (r.businessWaste ?? 0),
+    0,
+  );
+  const totalSavings = NETWORK_DATA.reduce(
+    (sum, r) => sum + (r.savings ?? 0),
+    0,
+  );
+  const valueAtRisk = NETWORK_DATA.filter((r) => (r.deviationCount ?? 0) > 0).reduce(
+    (sum, r) => sum + (r.businessWaste ?? 0),
+    0,
+  );
 
   const topBusinessWasteData = NETWORK_DATA.filter(
     (r): r is NetworkRow & { businessWaste: number; savings: number } =>
@@ -157,7 +170,7 @@ export default function NetworkSummary() {
       <div className="flex-1 min-h-0 overflow-auto">
         <div className="flex flex-col gap-4 p-5">
           {/* Overview tiles */}
-          <div className="grid grid-cols-3 gap-4 shrink-0">
+          <div className="grid grid-cols-4 gap-4 shrink-0">
             <OverviewTile
               icon={<Network size={18} />}
               label="Total Networks"
@@ -170,12 +183,23 @@ export default function NetworkSummary() {
               value={transitioningCbus}
               accent="#00695C"
             />
-            <OverviewTile
+            <DualMetricTile
+              icon={<Wallet size={18} />}
+              title="Business Waste + Savings"
+              accent="#1565C0"
+              metrics={[
+                { label: "Business Waste", value: fmtMoney(totalBusinessWaste), color: "#1565C0" },
+                { label: "Savings", value: fmtMoney(totalSavings), color: "#15803d" },
+              ]}
+            />
+            <DualMetricTile
               icon={<AlertTriangle size={18} />}
-              label="Networks with Deviations"
-              value={networksWithDeviations}
+              title="Networks with Deviations"
               accent="#b91c1c"
-              sub="Require immediate action"
+              metrics={[
+                { label: "Require immediate action", value: String(networksWithDeviations), color: "#b91c1c" },
+                { label: "Value at Risk", value: fmtMoney(valueAtRisk), color: "#b91c1c" },
+              ]}
             />
           </div>
 
@@ -324,19 +348,71 @@ function OverviewTile({
   );
 }
 
+// ─── Dual-metric tile ─────────────────────────────────────────────────────────
+
+function DualMetricTile({
+  icon,
+  title,
+  accent,
+  metrics,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  accent: string;
+  metrics: [
+    { label: string; value: string; color: string },
+    { label: string; value: string; color: string },
+  ];
+}) {
+  return (
+    <div
+      className="rounded-lg px-4 py-3.5 flex flex-col gap-2.5"
+      style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          style={{ backgroundColor: `${accent}1a`, color: accent }}
+        >
+          {icon}
+        </div>
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wide truncate"
+          style={{ color: "#6b7280" }}
+        >
+          {title}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {metrics.map((m) => (
+          <div key={m.label} className="min-w-0">
+            <div className="text-lg font-bold truncate" style={{ color: m.color }}>
+              {m.value}
+            </div>
+            <div className="text-[10px] mt-0.5 truncate" style={{ color: "#9ca3af" }}>
+              {m.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Network Details table ────────────────────────────────────────────────────
 
 const COLS = [
-  { label: "Network ID", width: 150 },
+  { label: "Network ID", width: 120 },
   { label: "Project Name", width: 200 },
   { label: "Status", width: 100 },
   { label: "Selected Scenario", width: 190 },
   { label: "Old CBU Count", width: 100 },
+  { label: "Deviation Count", width: 110 },
   { label: "Business Waste", width: 110 },
+  { label: "Total Savings", width: 110 },
   { label: "Total Cost", width: 100 },
   // { label: "Benefit", width: 150 },
   { label: "Production Stop Date", width: 150 },
-  { label: "Deviation Count", width: 110 },
   { label: "View Details", width: 90 },
 ];
 
@@ -393,7 +469,7 @@ function NetworkDetailsTable({
                 style={{ backgroundColor: "#ffffff" }}
               >
                 <td
-                  className="px-3 py-2.5 whitespace-nowrap font-semibold"
+                  className="px-3 py-2.5 whitespace-nowrap"
                   style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#1565C0", position: "sticky", left: 0, zIndex: 10, backgroundColor: "#ffffff", boxShadow: "2px 0 4px rgba(15,23,42,0.08)" }}
                 >
                   {row.networkId}
@@ -429,9 +505,37 @@ function NetworkDetailsTable({
                 </td>
                 <td
                   className="px-3 py-2.5 whitespace-nowrap"
+                  style={{
+                    borderRight: `1px solid ${BORDER}`,
+                    borderTop: `1px solid ${BORDER}`,
+                    color: row.deviationCount ? "#1565C0" : "#9ca3af",
+                  }}
+                >
+                  {(row.deviationCount ?? 0) > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onDeviationClick(row)}
+                      title="View network deviations"
+                      className="text-xs font-normal underline decoration-dotted underline-offset-2 cursor-pointer"
+                      style={{ color: "#1565C0" }}
+                    >
+                      {row.deviationCount}
+                    </button>
+                  ) : (
+                    "NA"
+                  )}
+                </td>
+                <td
+                  className="px-3 py-2.5 whitespace-nowrap"
                   style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
                 >
                   {fmtMoney(row.businessWaste)}
+                </td>
+                <td
+                  className="px-3 py-2.5 whitespace-nowrap"
+                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
+                >
+                  {fmtMoney(row.savings)}
                 </td>
                 <td
                   className="px-3 py-2.5 whitespace-nowrap"
@@ -450,28 +554,6 @@ function NetworkDetailsTable({
                   style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
                 >
                   {row.productionStopDate}
-                </td>
-                <td
-                  className="px-3 py-2.5 whitespace-nowrap font-semibold"
-                  style={{
-                    borderRight: `1px solid ${BORDER}`,
-                    borderTop: `1px solid ${BORDER}`,
-                    color: row.deviationCount ? "#1565C0" : "#9ca3af",
-                  }}
-                >
-                  {(row.deviationCount ?? 0) > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => onDeviationClick(row)}
-                      title="View network deviations"
-                      className="font-semibold underline decoration-dotted underline-offset-2 cursor-pointer"
-                      style={{ color: "#1565C0" }}
-                    >
-                      {row.deviationCount}
-                    </button>
-                  ) : (
-                    "NA"
-                  )}
                 </td>
                 <td
                   className="px-3 py-2.5 text-left"

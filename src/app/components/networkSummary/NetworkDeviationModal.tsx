@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { X } from "lucide-react";
 import { useNav } from "../../App";
-import { type NetworkRow } from "./networkData";
+import { deviationStatusColor, type NetworkRow } from "./networkData";
 
 const BORDER = "#e2e8f0";
 
@@ -13,7 +13,7 @@ interface Props {
 export function NetworkDeviationModal({ row, onClose }: Props) {
   const { navigate } = useNav();
   const progressPct = 50;
-  const deviations = ["Action item delay", "Production plan change"];
+  const actionItems = row.deviationDetails ?? [];
 
   return (
     <div
@@ -28,7 +28,7 @@ export function NetworkDeviationModal({ row, onClose }: Props) {
         transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
         className="flex flex-col overflow-hidden"
         style={{
-          width: "min(92vw, 420px)",
+          width: "min(92vw, 560px)",
           maxHeight: "85vh",
           backgroundColor: "#ffffff",
           borderRadius: 16,
@@ -109,18 +109,72 @@ export function NetworkDeviationModal({ row, onClose }: Props) {
               </span>
             }
           />
-          <Field
-            label="Deviation Details"
-            value={
-              <ul className="flex flex-col gap-1">
-                {deviations.map((d) => (
-                  <li key={d} style={{ color: "#374151" }}>
-                    • {d}
-                  </li>
-                ))}
-              </ul>
-            }
-          />
+          <div className="flex flex-col gap-1.5">
+            <span
+              className="text-[10px] font-semibold uppercase tracking-wide"
+              style={{ color: "#6b7280" }}
+            >
+              Deviation Details
+            </span>
+            {actionItems.length === 0 ? (
+              <p className="text-xs" style={{ color: "#9ca3af" }}>
+                No action item details available.
+              </p>
+            ) : (
+              <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr style={{ backgroundColor: "#f8fafc", borderBottom: `1px solid ${BORDER}` }}>
+                      <th
+                        className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wide"
+                        style={{ color: "#94a3b8" }}
+                      >
+                        Action Item
+                      </th>
+                      <th
+                        className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap"
+                        style={{ color: "#94a3b8" }}
+                      >
+                        Owner
+                      </th>
+                      <th
+                        className="text-left px-3 py-2 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap"
+                        style={{ color: "#94a3b8" }}
+                      >
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {actionItems.map((item, i) => {
+                      const sc = deviationStatusColor(item.status);
+                      return (
+                        <tr
+                          key={item.actionId}
+                          style={{ borderTop: i > 0 ? `1px solid ${BORDER}` : undefined }}
+                        >
+                          <td className="px-3 py-2.5" style={{ color: "#111827" }}>
+                            {item.description}
+                          </td>
+                          <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: "#374151" }}>
+                            {item.owner}
+                          </td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span
+                              className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
+                              style={{ backgroundColor: sc.bg, color: sc.text }}
+                            >
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="px-5 py-3 shrink-0" style={{ borderTop: `1px solid ${BORDER}` }}>
