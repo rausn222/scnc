@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeftRight, Box, Calendar, Clock3,ListChecks, ShoppingCart, SlidersHorizontal } from "lucide-react";
+import { ArrowLeftRight, Box, Calendar, ListChecks, ShoppingCart, SlidersHorizontal } from "lucide-react";
 import type { CBURow } from "../../data";
 import { StepSection } from "../StepSection";
 import {
@@ -27,12 +27,11 @@ import { Modal } from "../Modal";
 import { OpenPoAssumptionsContent } from "./OpenPoAssumptionsContent";
 import { RmpmConnectivityContent } from "./RmpmConnectivityContent";
 import { RmpmBomPendingContent } from "./RmpmBomPendingContent";
-import { IutFeasibilityContent } from "./IutFeasibilityContent";
+import { IutFeasibilityContent, MATERIAL_BATCH_DATA, getMaterialBatchKey } from "./IutFeasibilityContent";
 import { MoqBreakContent } from "./MoqBreakContent";
 import MaterialScopeContent, { MATERIAL_SCOPE_DATA } from "./MaterialScopeContent";
-import { ShelfLifeContent, ShelfLifeRow } from "./ShelfLifeContent";
 
-type AssumptionModalKey = "openpo" | "rmpm" | "iut" | "moq" | "materialScope" | "shelfLife" | "custom";
+type AssumptionModalKey = "openpo" | "rmpm" | "iut" | "moq" | "materialScope" | "custom";
 
 type MaterialScopeGroup = {
   materialType: "PM" | "RM";
@@ -94,32 +93,6 @@ function countPillStyle(count: number, total: number) {
     color: count === total ? "#166534" : count === 0 ? "#64748b" : "#92400e",
   };
 }
-export const SHELF_LIFE_DATA: ShelfLifeRow[] = [
-    {
-        plant: "U535",
-        materialType: "RM",
-    materialCode: "65284824",
-    description: "Mineral Oil Base - BP Grade RM",
-        batchNumber: "0009843159",
-        expiryDate: "19-09-2026",
-    },
-    {
-    plant: "UTR",
-    materialType: "RM",
-    materialCode: "65284824",
-    description: "Mineral Oil Base - BP Grade RM",
-        batchNumber: "0009843160",
-        expiryDate: "29-09-2026",
-    },
-    {
-      plant: "U535",
-      materialType: "PM",
-      materialCode: "11477867",
-      description: "VAS ALOE FRESH 100ML FENOMENO CAP",
-      batchNumber: "0009843161",
-      expiryDate: "18-09-2026",
-    },
-];
 export function SimulationAssumptionsStep({
   oldCbuRow,
   newCbuRow,
@@ -148,9 +121,12 @@ export function SimulationAssumptionsStep({
       ),
     ),
   );
-  const [shelfLifeThresholds, setShelfLifeThresholds] = useState<
+  const [batchThresholds, setBatchThresholds] = useState<
     Record<string, string>
   >({});
+  const [selectedBatches, setSelectedBatches] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(MATERIAL_BATCH_DATA.map((row) => [getMaterialBatchKey(row), true])),
+  );
 
   const [iutLanes, setIutLanes] = useState<Record<string, boolean>>({
     "U535→UTR": true,
@@ -220,15 +196,19 @@ export function SimulationAssumptionsStep({
 
     onDirty?.();
   };
-  const handleShelfLifeThresholdChange = (
-    rowKey: string,
+  const handleBatchThresholdChange = (
+    materialCode: string,
     value: string,
   ) => {
-    setShelfLifeThresholds((previous) => ({
+    setBatchThresholds((previous) => ({
       ...previous,
-      [rowKey]:value,
+      [materialCode]: value,
     }));
 
+    onDirty?.();
+  };
+  const handleBatchToggle = (batchKey: string) => {
+    setSelectedBatches((prev) => ({ ...prev, [batchKey]: !(prev[batchKey] ?? true) }));
     onDirty?.();
   };
 
@@ -319,10 +299,6 @@ export function SimulationAssumptionsStep({
     () => buildCustomScenarioBaseline(customInputsSourceRow),
     [customInputsSourceRow],
   );
-  const shelfLifeMaterialKeys = new Set(SHELF_LIFE_DATA.map((row) => `${row.materialType}-${row.materialCode}`));
-  const shelfLifeThresholdCount = Array.from(shelfLifeMaterialKeys).filter(
-    (materialKey) => shelfLifeThresholds[materialKey] !== undefined && shelfLifeThresholds[materialKey] !== "",
-  ).length;
   // Seed the custom-overrides form with every plant from the baseline by default — the
   // user can still remove/edit plants from there, but shouldn't have to click "Load all
   // plants" themselves just to see the starting values. Skipped once the user has actually
@@ -487,23 +463,6 @@ export function SimulationAssumptionsStep({
           onClick={() => setOpenModal("moq")}
         />
         <AssumptionTile
-          icon={<Clock3 size={16} style={{ color: C.blue }} />}
-          title="Shelf life"
-          subtitle="Configure shelf-life thresholds by batch"
-          summary={
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-              style={countPillStyle(
-                shelfLifeThresholdCount,
-                SHELF_LIFE_DATA.length,
-              )}
-            >
-              {shelfLifeThresholdCount} of {SHELF_LIFE_DATA.length} configured
-            </span>
-          }
-          onClick={() => setOpenModal("shelfLife")}
-        />
-        <AssumptionTile
           icon={<SlidersHorizontal size={16} style={{ color: C.blue }} />}
           title="Customise inputs"
           subtitle="Override plant & component-level values"
@@ -595,7 +554,10 @@ export function SimulationAssumptionsStep({
           maxWidth="min(96vw, 1040px)"
           maxHeight="86vh"
         >
-          <MaterialScopeContent selected={materialScopeSelected} onToggle={handleMaterialScopeToggle} />
+          <MaterialScopeContent
+            selected={materialScopeSelected}
+            onToggle={handleMaterialScopeToggle}
+          />
         </Modal>
       )}
 
@@ -605,7 +567,7 @@ export function SimulationAssumptionsStep({
           title="IUT feasibility"
           subtitle={iutSubtitle}
           onClose={() => setOpenModal(null)}
-          maxWidth="min(96vw, 980px)"
+          maxWidth="min(98vw, 1180px)"
           maxHeight="86vh"
         >
           <IutFeasibilityContent
@@ -613,6 +575,10 @@ export function SimulationAssumptionsStep({
             contractLeadTimes={contractLeadTimes}
             onContractLeadTimeChange={handleContractLeadTimeChange}
             onTogglePossible={handleIutLaneToggle}
+            batchThresholds={batchThresholds}
+            onBatchThresholdChange={handleBatchThresholdChange}
+            selectedBatches={selectedBatches}
+            onBatchToggle={handleBatchToggle}
           />
         </Modal>
       )}
@@ -632,22 +598,6 @@ export function SimulationAssumptionsStep({
           />
         </Modal>
       )}
-      {openModal === "shelfLife" && (
-        <Modal
-          icon={<Clock3 size={17} className="text-white" />}
-          title="Shelf life"
-          subtitle="Configure shelf life threshold by Material"
-          onClose={() => setOpenModal(null)}
-          maxWidth="min(96vw, 1040px)"
-          maxHeight="86vh"
-        >
-          <ShelfLifeContent
-            thresholds={shelfLifeThresholds}
-            onThresholdChange={handleShelfLifeThresholdChange}
-          />
-        </Modal>
-      )}
-
       {openModal === "custom" && (
         <Modal
           icon={<SlidersHorizontal size={17} className="text-white" />}
