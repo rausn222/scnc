@@ -279,6 +279,10 @@ export interface AggregatedComponent {
   blockedStock: number;
   totalStock: number;
   openPOStock: number;
+  // Only set for high-contributing components — the % of this CBU's demand
+  // that this RMPM accounts for. Unique components (getAggregatedComponents)
+  // are implicitly 100% and leave this unset.
+  contributionPct?: number;
 }
 
 const COMPONENT_DESCRIPTIONS: Record<string, string> = {
@@ -286,7 +290,49 @@ const COMPONENT_DESCRIPTIONS: Record<string, string> = {
   "65428959": "85ml Bottle Cap & Shrink Sleeve PM",
   "64322546": "CLD VVSLN INTNSV CARE ALOE FRSH 400ML",
   "64330490": "CLD VVSLN INTNSV CARE ALOE FRSH 400ML",
+  "68811023": "Aloe Vera Extract Concentrate — Key RM",
 };
+
+// Placeholder dataset for the "High Contributing" toggle — deliberately a
+// different set of components than getAggregatedComponents() returns, since
+// this view is meant to surface components outside the standard breakdown
+// (e.g. sourced from a separate spend/criticality analysis). Values are
+// lightly varied per CBU (via a char-code seed) purely so the demo doesn't
+// show identical numbers on every row; swap for real data when available.
+const HIGH_CONTRIBUTING_TEMPLATE: Array<{
+  componentCode: string;
+  componentMaterialType: string;
+  baseTotalStock: number;
+}> = [
+  { componentCode: "68811023", componentMaterialType: "1002", baseTotalStock: 210000 },
+];
+
+export function getHighContributingComponents(
+  cbuCode: string,
+): AggregatedComponent[] {
+  let seed = 0;
+  for (let i = 0; i < cbuCode.length; i++) seed += cbuCode.charCodeAt(i);
+  const scale = 0.85 + (seed % 30) / 100;
+
+  return HIGH_CONTRIBUTING_TEMPLATE.map((t) => {
+    const totalStock = Math.round(t.baseTotalStock * scale);
+    const unrestrictedStock = Math.round(totalStock * 0.82);
+    const qualityStock = Math.round(totalStock * 0.1);
+    const blockedStock = totalStock - unrestrictedStock - qualityStock;
+    // Matches the "High Contributing (≥70%)" threshold this dataset represents.
+    const contributionPct = 70 + (seed % 30);
+    return {
+      componentCode: t.componentCode,
+      componentMaterialType: t.componentMaterialType,
+      unrestrictedStock,
+      qualityStock,
+      blockedStock,
+      totalStock,
+      openPOStock: 0,
+      contributionPct,
+    };
+  });
+}
 
 export function getComponentDescriptionByCode(code: string): string {
   return COMPONENT_DESCRIPTIONS[code] ?? "";
@@ -725,12 +771,119 @@ const STANDARD_PLANTS = [
 export const PLANT_CLUSTER_MAP: Record<string, string> = {
   U635: "North",
   U071: "North",
-  ULU: "West",
+  ULU: "Lotus",
   UTR: "Haridwar",
-  U535: "DDP",
+  U535: "DDF",
   UHI: "East",
   U886: "South",
   UCE: "East",
+  UPDY: "Pondy",
+  U893: "HFL",
+  UPY: "Pondy",
+  U842: "VVF",
+  U786: "VVF",
+  UGR: "Garden Reach",
+  U927: "NA",
+  UOI: "Orai",
+  UKN: "Khamgoan",
+  UAQ: "LLPL",
+  URP: "R M Chemicals",
+  UHU: "Pondy",
+  UTH: "Haridwar",
+  UDE: "DDF",
+  U883: "Sumerpur",
+  UCH: "Chhindwara",
+  USM: "Sumerpur",
+  U808: "HFL",
+  UTE: "DDF",
+  UTV: "Chiplun",
+  U571: "Haridwar",
+  UPQ: "PIONEER INTERNATIONAL",
+  U824: "Sonepat",
+  U036: "Mysore",
+  U841: "Sumerpur",
+  U966: "RMJ VERITABLE",
+  U025: "KPF",
+  UKD: "Kandla",
+  U832: "ALPHA",
+  U096: "Mosons Extractions",
+  U913: "NA",
+  U033: "Hosur",
+  U925: "PARMANN",
+  U052: "Etah",
+  UJA: "Jewel consumer care",
+  U950: "MALAS FOOD",
+  U859: "RAMA KRISHNA PACKAGING",
+  U860: "One Asia Network",
+  U382: "Swaraj",
+  U530: "Swaraj",
+  UPK: "NA",
+  U920: "Sahyadri Farms",
+  U931: "KJS INDIA",
+  U336: "Abishek Enterprises",
+  U865: "Crest Hygiene",
+  U888: "RHP",
+  U528: "ROHINI PACKER",
+  U968: "Rajpura",
+  UVIJ: "SPECTRA",
+  U818: "BONVILLE FOODS",
+  USD: "Hitech",
+  UVK: "IPF-Vikram",
+  UHJ: "Herbal Concepts",
+  U866: "Crest Topicals",
+  UHA: "Amli",
+  U914: "ALLIANCE",
+  U958: "PARMANN",
+  U915: "ALLIANCE",
+  U815: "NAGA LIMITED DETERGENT",
+  UTM: "Haridwar",
+  UXZ: "NA",
+  UDS: "Dapada",
+  UUB: "Haridwar",
+  UDQ: "Dapada",
+  U892: "HFL",
+  UPN: "Pondy",
+  UHT: "Amli",
+  UBJ: "Sumerpur",
+  U806: "SINHAL GLOBAL",
+  U823: "NA",
+  U343: "UIEL",
+  U969: "Rajpura",
+  U048: "KPF-ICD",
+  U796: "PIONEER INTERNATIONAL",
+  U829: "NA",
+  UTP: "Tatapuram",
+  UHH: "Haldia",
+  UOL: "Abdos",
+  U153: "Hershey",
+  U964: "RAMA KRISHNA PACKAGING",
+  U049: "Nalagarh",
+  U060: "NA",
+  U599: "RISIVEDA HERBAL",
+  U600: "R M Chemicals",
+  UOR: "ORICLEAN",
+  UTQ: "Haridwar",
+  UAD: "LLPL",
+  UTO: "Haridwar",
+  U965: "RAMA KRISHNA PACKAGING",
+  U047: "Nashik",
+  U773: "STELLA INDUSTRIES",
+  U527: "Shivambhu Internation",
+  U912: "ORIFOOD",
+  U871: "ALPHA",
+  U872: "AEROCARE",
+  U831: "Pritam International",
+  UVY: "LAXMIVINAYAK VENTURES",
+  U970: "Avalon",
+  U591: "Symega Savoury Technology",
+  UCD: "CHEMEX DETERGENTS",
+  UMU: "Magic Foods",
+  U785: "RUDRAKSH DETERGENT",
+  U822: "HFL",
+  U956: "Rajahmundry",
+  U078: "PARMANN",
+  U101: "Vedika",
+  U820: "IPF VIKRAM",
 };
 
 const CLUSTER_DISPLAY_ORDER = [
@@ -1283,6 +1436,9 @@ export function getComponentsByCluster(
   return { clusters, rows: Array.from(map.values()) };
 }
 
+/** Actual current date, used across the app so demo data always stays relative to "now". */
+export const TODAY = new Date();
+
 export interface DemandRow {
   srNo: number;
   cbu: string;
@@ -1335,40 +1491,24 @@ function inferBrand(description: string): string {
   return description.split(/\s+/)[0] || "Other";
 }
 
-function inferBasePack(description: string): string {
-  const match = description.match(
-    /(\d+\s*[xX]\s*\d+\s*(?:ml|ML|g|G)?|\d+\s*(?:ml|ML|g|G))/,
-  );
-  return match?.[1]?.replace(/\s+/g, " ").trim() ?? "Standard";
-}
-
 export interface CBURowFilterAttributes {
   bg: string;
   smallC: string;
   format: string;
   brand: string;
-  materialCode: string;
-  materialDescription: string;
   cbuCode: string;
   cbuDescription: string;
-  basePack: string;
-  basePackDescription: string;
 }
 
 export function getRowFilterAttributes(row: CBURow): CBURowFilterAttributes {
   const brand = inferBrand(row.cbuDescription);
-  const basePack = inferBasePack(row.cbuDescription);
   return {
     bg: BG_OPTIONS[(row.srNo - 1) % BG_OPTIONS.length],
     smallC: SMALL_C_OPTIONS[(row.srNo - 1) % SMALL_C_OPTIONS.length],
     format: FORMAT_OPTIONS[(row.srNo - 1) % FORMAT_OPTIONS.length],
     brand,
-    materialCode: row.cbuCode,
-    materialDescription: row.cbuDescription,
     cbuCode: row.cbuCode,
     cbuDescription: row.cbuDescription,
-    basePack,
-    basePackDescription: `${brand} ${basePack} Base Pack`,
   };
 }
 
@@ -1401,3 +1541,406 @@ function syncCbuRmpmFromComponentFgStock(): void {
 }
 
 syncCbuRmpmFromComponentFgStock();
+
+// ─── DC-level stock breakdown ─────────────────────────────────────────────────
+// Real per-location DC/plant stock data, keyed by FG material code (see
+// getRowFgMaterial) — see DC_STOCK_BREAKDOWN / FACTORY_STOCK_BREAKDOWN below.
+// CBUs without supplied source data get a deterministic dummy breakdown
+// (seeded by srNo, stable across re-renders) that sums to the row's actual
+// fg.dcStock / fg.factoryStock total, so the popup always reconciles with
+// the dashboard figure.
+
+export interface DcStockRow {
+  plantCode: string;
+  baseUom: string;
+  unrestrictedStock: number;
+  qualityStock: number;
+  blockedStock: number;
+  totalStockExclInTransit: number;
+  plantOrDc: "DC" | "Plant" | "Route";
+}
+
+type DcStockTuple = [
+  plantCode: string,
+  unrestrictedStock: number,
+  qualityStock: number,
+  blockedStock: number,
+  totalStockExclInTransit: number,
+];
+
+const VAFA1R3_DC_STOCK_RAW: DcStockTuple[] = [
+  ["ABDH", 2592, 0, 0, 2592],
+  ["AMBH", 0, 0, 0, 0],
+  ["AMGH", 0, 0, 0, 0],
+  ["APJH", 0, 0, 0, 0],
+  ["ASDH", 0, 0, 0, 0],
+  ["AURH", 0, 0, 0, 0],
+  ["BANH", 0, 0, 0, 0],
+  ["BBFH", 0, 0, 0, 0],
+  ["BDDH", 0, 0, 0, 0],
+  ["BGLH", 0, 0, 0, 0],
+  ["BHJH", 0, 0, 0, 0],
+  ["BHUH", 0, 0, 0, 0],
+  ["BIBH", 0, 0, 0, 0],
+  ["BLRH", 0, 0, 0, 0],
+  ["BNDH", 4896, 0, 0, 4896],
+  ["BTFH", 0, 0, 0, 0],
+  ["CB1H", 6528, 0, 0, 6528],
+  ["CBDH", 0, 0, 0, 0],
+  ["CBFH", 0, 0, 0, 0],
+  ["CBNH", 0, 0, 0, 0],
+  ["CCUH", 0, 0, 0, 0],
+  ["CDDH", 0, 0, 0, 0],
+  ["CHKH", 14784, 0, 1, 14785],
+  ["CHNH", 0, 0, 0, 0],
+  ["CHPH", 0, 0, 0, 0],
+  ["COCH", 0, 0, 0, 0],
+  ["CUTH", 1728, 0, 0, 1728],
+  ["DAPH", 0, 0, 0, 0],
+  ["DDIH", 0, 0, 0, 0],
+  ["DDLH", 0, 0, 0, 0],
+  ["DGKH", 0, 0, 0, 0],
+  ["DGLH", 0, 0, 0, 0],
+  ["DHUH", 0, 0, 0, 0],
+  ["DJRH", 0, 0, 0, 0],
+  ["DKGH", 0, 0, 0, 0],
+  ["DL1H", 0, 0, 0, 0],
+  ["DL2H", 0, 0, 0, 0],
+  ["DLGH", 6712, 0, 296, 7008],
+  ["DMGH", 0, 0, 0, 0],
+  ["DNMH", 0, 0, 0, 0],
+  ["DOKH", 0, 0, 0, 0],
+  ["DSMH", 0, 0, 0, 0],
+  ["EMDH", 0, 0, 0, 0],
+  ["G2DH", 0, 0, 0, 0],
+  ["GAUH", 192, 0, 0, 192],
+  ["GDDH", 0, 0, 0, 0],
+  ["GHDH", 0, 0, 0, 0],
+  ["GHDU", 0, 0, 0, 0],
+  ["GHPH", 0, 0, 0, 0],
+  ["GRUH", 0, 0, 0, 0],
+  ["GSDH", 0, 0, 0, 0],
+  ["GTRH", 0, 0, 0, 0],
+  ["GURH", 0, 0, 0, 0],
+  ["GWBH", 0, 0, 0, 0],
+  ["GWTH", 0, 0, 0, 0],
+  ["GZBH", 7008, 0, 0, 7008],
+  ["GZBU", 0, 0, 0, 0],
+  ["GZPH", 0, 0, 0, 0],
+  ["HADH", 0, 0, 0, 0],
+  ["HAHH", 0, 0, 0, 0],
+  ["HALH", 0, 0, 0, 0],
+  ["HARH", 1248, 0, 0, 1248],
+  ["HBDH", 29760, 0, 0, 29760],
+  ["HBFH", 0, 0, 0, 0],
+  ["HDDH", 0, 0, 0, 0],
+  ["HDRH", 0, 0, 0, 0],
+  ["HEMH", 0, 0, 0, 0],
+  ["HKDH", 0, 0, 0, 0],
+  ["HNFH", 0, 0, 0, 0],
+  ["HOMA", 0, 0, 0, 0],
+  ["HRDH", 0, 0, 0, 0],
+  ["HRIH", 0, 0, 0, 0],
+  ["HRKH", 0, 0, 0, 0],
+  ["HUBH", 0, 0, 0, 0],
+  ["HY2H", 0, 0, 0, 0],
+  ["HY3H", 0, 0, 0, 0],
+  ["HYDH", 0, 0, 0, 0],
+  ["I2DH", 0, 0, 0, 0],
+  ["I2SH", 0, 0, 0, 0],
+  ["I2UH", 0, 0, 0, 0],
+  ["IBGH", 0, 0, 0, 0],
+  ["IBLH", 0, 0, 0, 0],
+  ["ICHH", 0, 0, 0, 0],
+  ["IDRH", 0, 0, 0, 0],
+  ["IKOH", 0, 0, 0, 0],
+  ["ILUH", 0, 0, 0, 0],
+  ["IMUH", 0, 0, 0, 0],
+  ["INDH", 0, 0, 0, 0],
+  ["INGH", 0, 0, 0, 0],
+  ["INSH", 0, 0, 0, 0],
+  ["IPFH", 0, 0, 0, 0],
+  ["IVJH", 0, 0, 0, 0],
+  ["J2BH", 0, 0, 0, 0],
+  ["J2PH", 0, 0, 0, 0],
+  ["JABH", 0, 0, 0, 0],
+  ["JAMH", 7968, 0, 0, 7968],
+  ["JAPH", 0, 0, 0, 0],
+  ["JCDH", 0, 0, 0, 0],
+  ["JHTH", 0, 0, 0, 0],
+  ["JMUH", 0, 0, 0, 0],
+  ["JPRH", 3936, 0, 0, 3936],
+  ["K2DH", 0, 0, 0, 0],
+  ["K2IH", 0, 0, 0, 0],
+  ["KCHH", 0, 0, 0, 0],
+  ["KDDH", 0, 0, 0, 0],
+  ["KHGH", 0, 0, 0, 0],
+  ["KHNH", 0, 0, 0, 0],
+  ["KKOH", 0, 0, 0, 0],
+  ["KLIH", 0, 0, 0, 0],
+  ["KLRH", 0, 0, 0, 0],
+  ["KNAH", 0, 0, 0, 0],
+  ["KNBH", 0, 0, 0, 0],
+  ["KNPH", 0, 0, 0, 0],
+  ["KOLH", 0, 0, 0, 0],
+  ["KOPH", 2880, 0, 0, 2880],
+  ["KPDH", 0, 0, 0, 0],
+  ["KPRH", 0, 0, 0, 0],
+  ["KSDH", 0, 0, 0, 0],
+  ["KSHH", 0, 0, 0, 0],
+  ["KURH", 0, 0, 0, 0],
+  ["LKNH", 2880, 0, 0, 2880],
+  ["LPLH", 0, 0, 0, 0],
+  ["MALH", 0, 0, 0, 0],
+  ["MASH", 0, 0, 0, 0],
+  ["MDRH", 0, 0, 0, 0],
+  ["MMBH", 0, 0, 0, 0],
+  ["MMDH", 9600, 0, 0, 9600],
+  ["MMHH", 0, 0, 0, 0],
+  ["MMSH", 758, 0, 0, 758],
+  ["MOGH", 0, 0, 0, 0],
+  ["NAGH", 0, 0, 0, 0],
+  ["NASH", 0, 0, 0, 0],
+  ["NBFH", 0, 0, 0, 0],
+  ["NBHH", 0, 0, 0, 0],
+  ["NBSH", 0, 0, 0, 0],
+  ["NCLH", 0, 0, 0, 0],
+  ["NCMH", 0, 0, 0, 0],
+  ["NCRH", 0, 0, 0, 0],
+  ["NGPH", 0, 0, 0, 0],
+  ["NGRH", 1056, 0, 0, 1056],
+  ["P2NH", 0, 0, 0, 0],
+  ["P2TH", 0, 0, 0, 0],
+  ["PABH", 0, 0, 0, 0],
+  ["PARH", 0, 0, 0, 0],
+  ["PATH", 577, 0, 10, 587],
+  ["PNFH", 0, 0, 0, 0],
+  ["PNJH", 0, 0, 0, 0],
+  ["PNMH", 0, 0, 0, 0],
+  ["PPTH", 0, 0, 0, 0],
+  ["PRTH", 0, 0, 0, 0],
+  ["PTBH", 0, 0, 0, 0],
+  ["PTDH", 0, 0, 0, 0],
+  ["PTNH", 192, 0, 0, 192],
+  ["PUNH", 0, 0, 0, 0],
+  ["R2IH", 0, 0, 0, 0],
+  ["RAIH", 1440, 0, 0, 1440],
+  ["RCHH", 0, 0, 0, 0],
+  ["RJ2H", 0, 0, 0, 0],
+  ["RJPH", 16416, 0, 0, 16416],
+  ["S2BH", 0, 0, 0, 0],
+  ["S2KH", 0, 0, 0, 0],
+  ["SANH", 0, 0, 0, 0],
+  ["SBFH", 0, 0, 0, 0],
+  ["SBUH", 0, 0, 0, 0],
+  ["SDDH", 0, 0, 0, 0],
+  ["SECH", 0, 0, 0, 0],
+  ["SEHH", 0, 0, 0, 0],
+  ["SHAH", 960, 0, 0, 960],
+  ["SHBH", 0, 0, 0, 0],
+  ["SHKH", 0, 0, 0, 0],
+  ["SHKU", 0, 0, 0, 0],
+  ["SHPH", 0, 0, 0, 0],
+  ["SHRH", 0, 0, 0, 0],
+  ["SILH", 0, 0, 0, 0],
+  ["SL1H", 0, 0, 0, 0],
+  ["SLDH", 0, 0, 0, 0],
+  ["SLGH", 96, 0, 0, 96],
+  ["SLRH", 0, 0, 0, 0],
+  ["SMDH", 0, 0, 0, 0],
+  ["SMMH", 0, 0, 0, 0],
+  ["SMRH", 0, 0, 0, 0],
+  ["SMRU", 0, 0, 0, 0],
+  ["SPRH", 0, 0, 0, 0],
+  ["SRIH", 0, 0, 0, 0],
+  ["SVDH", 0, 0, 0, 0],
+  ["TCHH", 0, 0, 0, 0],
+  ["TCRH", 0, 0, 0, 0],
+  ["TSRH", 96, 0, 0, 96],
+  ["V2SH", 0, 0, 0, 0],
+  ["VABH", 5952, 0, 0, 5952],
+  ["VACH", 0, 0, 0, 0],
+  ["VADH", 0, 0, 0, 0],
+  ["VAHH", 0, 0, 0, 0],
+  ["VAPH", 0, 0, 0, 0],
+  ["VASH", 0, 0, 0, 0],
+  ["VDDH", 0, 0, 0, 0],
+  ["VIJH", 0, 0, 0, 0],
+  ["VJAH", 0, 0, 0, 0],
+  ["VJDH", 2784, 0, 0, 2784],
+  ["VJWH", 0, 0, 0, 0],
+  ["VMDH", 0, 0, 0, 0],
+  ["VMHH", 0, 0, 0, 0],
+  ["VNPH", 0, 0, 0, 0],
+  ["VNSH", 96, 0, 0, 96],
+  ["VNSU", 0, 0, 0, 0],
+  ["VPPH", 0, 0, 0, 0],
+  ["W21H", 0, 0, 0, 0],
+  ["WADH", 0, 0, 0, 0],
+  ["WB1H", 0, 0, 0, 0],
+  ["WCHH", 0, 0, 0, 0],
+  ["XADH", 0, 0, 0, 0],
+  ["XAMH", 0, 0, 0, 0],
+  ["XARH", 0, 0, 0, 0],
+  ["XBGH", 0, 0, 0, 0],
+  ["XBLH", 0, 0, 0, 0],
+  ["XBNH", 0, 0, 0, 0],
+  ["XBRH", 0, 0, 0, 0],
+  ["XCHH", 0, 0, 0, 0],
+  ["XCOH", 0, 0, 0, 0],
+  ["XCUH", 0, 0, 0, 0],
+  ["XGUH", 0, 0, 0, 0],
+  ["XHRH", 0, 0, 0, 0],
+  ["XHYH", 0, 0, 0, 0],
+  ["XINH", 0, 0, 0, 0],
+  ["XJPH", 0, 0, 0, 0],
+  ["XLKH", 0, 0, 0, 0],
+  ["XMDH", 0, 0, 0, 0],
+  ["XPTH", 0, 0, 0, 0],
+  ["XRNH", 0, 0, 0, 0],
+  ["XRPH", 0, 0, 0, 0],
+  ["XSLH", 0, 0, 0, 0],
+  ["XSMH", 0, 0, 0, 0],
+  ["XULH", 0, 0, 0, 0],
+  ["XVJH", 0, 0, 0, 0],
+];
+
+function buildDcStockRows(raw: DcStockTuple[], plantOrDc: "DC" | "Plant"): DcStockRow[] {
+  return raw.map(([plantCode, unrestrictedStock, qualityStock, blockedStock, totalStockExclInTransit]) => ({
+    plantCode,
+    baseUom: "EA",
+    unrestrictedStock,
+    qualityStock,
+    blockedStock,
+    totalStockExclInTransit,
+    plantOrDc,
+  }));
+}
+
+function seededFraction(seed: number): () => number {
+  let s = seed || 1;
+  return () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+function pickSeededCodes(codes: string[], count: number, seed: number): string[] {
+  const n = Math.min(count, codes.length);
+  const start = ((seed % codes.length) + codes.length) % codes.length;
+  return Array.from({ length: n }, (_, i) => codes[(start + i) % codes.length]);
+}
+
+// Deterministically splits `total` across a seeded subset of `codes` so the
+// popup breakdown always sums to the row's actual FG stock figure.
+function buildDummyStockRows(
+  total: number,
+  codes: string[],
+  maxLocations: number,
+  seed: number,
+  plantOrDc: "DC" | "Plant",
+): DcStockRow[] {
+  if (total <= 0) return [];
+
+  const locationCount = Math.max(1, 1 + (seed % maxLocations));
+  const picked = pickSeededCodes(codes, locationCount, seed);
+  const rand = seededFraction(seed + 1);
+  const weights = picked.map(() => 0.4 + rand());
+  const weightSum = weights.reduce((a, b) => a + b, 0);
+  const totals = weights.map((w) => Math.round((total * w) / weightSum));
+  totals[totals.length - 1] += total - totals.reduce((a, b) => a + b, 0);
+
+  return picked.map((plantCode, i) => {
+    const t = totals[i];
+    const blockedStock = t > 2000 ? Math.round(t * 0.03) : 0;
+    return {
+      plantCode,
+      baseUom: "EA",
+      unrestrictedStock: t - blockedStock,
+      qualityStock: 0,
+      blockedStock,
+      totalStockExclInTransit: t,
+      plantOrDc,
+    };
+  });
+}
+
+export const DC_STOCK_BREAKDOWN: Record<string, DcStockRow[]> = {
+  VAFA1R3: buildDcStockRows(VAFA1R3_DC_STOCK_RAW, "DC"),
+};
+
+const ALL_DC_CODES = VAFA1R3_DC_STOCK_RAW.map(([plantCode]) => plantCode);
+
+export function getDcStockBreakdown(row: CBURow): DcStockRow[] {
+  const real = DC_STOCK_BREAKDOWN[getRowFgMaterial(row)];
+  if (real) return real;
+  return buildDummyStockRows(row.fg.dcStock, ALL_DC_CODES, 8, row.srNo, "DC");
+}
+
+const VAFA1R3_FACTORY_STOCK_RAW: DcStockTuple[] = [
+  ["U246", 0, 0, 0, 0],
+  ["U535", 0, 0, 0, 0],
+  ["U841", 0, 0, 0, 0],
+  ["U871", 0, 0, 0, 0],
+  ["UDE", 0, 0, 0, 0],
+  ["UDMY", 0, 0, 0, 0],
+  ["UHRA", 0, 0, 0, 0],
+  ["ULU", 0, 0, 0, 0],
+  ["UTR", 0, 0, 0, 0],
+];
+
+export const FACTORY_STOCK_BREAKDOWN: Record<string, DcStockRow[]> = {
+  VAFA1R3: buildDcStockRows(VAFA1R3_FACTORY_STOCK_RAW, "Plant"),
+};
+
+const ALL_FACTORY_CODES = VAFA1R3_FACTORY_STOCK_RAW.map(([plantCode]) => plantCode);
+
+export function getFactoryStockBreakdown(row: CBURow): DcStockRow[] {
+  const real = FACTORY_STOCK_BREAKDOWN[getRowFgMaterial(row)];
+  if (real && real.some((r) => r.totalStockExclInTransit > 0)) return real;
+  return buildDummyStockRows(
+    row.fg.factoryStock,
+    ALL_FACTORY_CODES,
+    4,
+    row.srNo + 500,
+    "Plant",
+  );
+}
+
+const ALL_TRANSIT_ORIGIN_PLANTS = Object.keys(PLANT_CLUSTER_MAP);
+const TRANSIT_DESTINATIONS = ["PATH", "NCRH", "HRIH"];
+
+// In-transit stock has no unrestricted/quality/blocked sub-status — it's a
+// single quantity moving along a plant → DC route — so each seeded row is
+// just a route and its share of the row's total in-transit quantity.
+function buildInTransitRows(total: number, seed: number): DcStockRow[] {
+  if (total <= 0) return [];
+  const routeCount = Math.max(1, 1 + (seed % 3));
+  const plants = pickSeededCodes(ALL_TRANSIT_ORIGIN_PLANTS, routeCount, seed);
+  const destRand = seededFraction(seed + 3);
+  const picked = plants.map(
+    (plant) =>
+      `${plant} → ${TRANSIT_DESTINATIONS[Math.floor(destRand() * TRANSIT_DESTINATIONS.length)]}`,
+  );
+  const rand = seededFraction(seed + 1);
+  const weights = picked.map(() => 0.4 + rand());
+  const weightSum = weights.reduce((a, b) => a + b, 0);
+  const totals = picked.map((_, i) =>
+    Math.round((total * weights[i]) / weightSum),
+  );
+  totals[totals.length - 1] += total - totals.reduce((a, b) => a + b, 0);
+
+  return picked.map((routeLabel, i) => ({
+    plantCode: routeLabel,
+    baseUom: "EA",
+    unrestrictedStock: totals[i],
+    qualityStock: 0,
+    blockedStock: 0,
+    totalStockExclInTransit: totals[i],
+    plantOrDc: "Route",
+  }));
+}
+
+export function getInTransitBreakdown(row: CBURow): DcStockRow[] {
+  return buildInTransitRows(row.fg.inTransitStock, row.srNo + 900);
+}

@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LabelList,
 } from "recharts";
 
 const WEEK_COUNT = 19;
@@ -27,7 +28,7 @@ function fmtK(n: number) {
   return String(n);
 }
 
-function generateWeeklyProduction(total: number) {
+export function generateWeeklyProduction(total: number) {
   const weights = Array.from({ length: WEEK_COUNT }, (_, i) => {
     const seasonal = 0.85 + Math.sin((i / WEEK_COUNT) * Math.PI * 2) * 0.12;
     const ramp = 0.9 + (i / (WEEK_COUNT - 1)) * 0.2;
@@ -141,7 +142,7 @@ export function ProductionPlanModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex items-center justify-center w-7 h-7 rounded-full transition-colors shrink-0 mt-0.5"
+              className="flex items-center justify-center w-7 h-7 rounded-full transition-colors shrink-0 mt-0.5 cursor-pointer"
               style={{ color: "rgba(255,255,255,0.55)" }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.backgroundColor =
@@ -214,10 +215,10 @@ export function ProductionPlanModal({
             WEEKLY PRODUCTION (EA)
           </p>
 
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={240}>
             <BarChart
               data={chartData}
-              margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
+              margin={{ top: 20, right: 8, bottom: 4, left: 0 }}
               barCategoryGap="30%"
             >
               <CartesianGrid
@@ -285,6 +286,17 @@ export function ProductionPlanModal({
                     }
                   />
                 ))}
+                <LabelList
+                  dataKey="production"
+                  position="top"
+                  offset={6}
+                  formatter={(v: number) => (v > 0 ? fmtK(v) : "")}
+                  style={{
+                    fontSize: 9,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fill: "#1e293b",
+                  }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

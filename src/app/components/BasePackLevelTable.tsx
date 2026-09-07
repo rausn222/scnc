@@ -529,7 +529,7 @@ export function BasePackLevelTable({
                         navigate({ page: "cbu-detail", srNo: row.srNo })
                       }
                       title="View CBU Detail"
-                      className="shrink-0 p-1 rounded transition-colors"
+                      className="shrink-0 p-1 rounded transition-colors cursor-pointer"
                       style={{ color: "#00695C" }}
                       onMouseEnter={(e) => {
                         (e.currentTarget as HTMLElement).style.backgroundColor =

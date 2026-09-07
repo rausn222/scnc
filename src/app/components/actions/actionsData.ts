@@ -2,7 +2,7 @@
 
 export type ScenarioType = "IUT" | "Procurement" | "PO Cancellation";
 export type ExecutionStatus = "IN PROGRESS" | "NOT STARTED" | "COMPLETED";
-export type ActionStatus = "PENDING" | "IN PROGRESS" | "COMPLETED";
+export type ActionStatus = "PENDING" | "INITIATED" | "IN PROGRESS" | "COMPLETED";
 
 export interface ActionRow {
   /** Stable unique key, e.g. "1.1" */
@@ -11,6 +11,9 @@ export interface ActionRow {
   item: number;
   /** Network this action belongs to — several scenario types can share one network */
   networkId: string;
+  projectName: string;
+  oldCbuCode: string;
+  newCbuCode: string;
   /** 1-based sequence within its scenario type, e.g. IUT #1, IUT #2 */
   seq: number;
   scenarioType: ScenarioType;
@@ -47,12 +50,13 @@ interface ScenarioSeed {
 }
 
 /**
- * A manual step can only move forward: PENDING -> IN PROGRESS or COMPLETED,
- * IN PROGRESS -> COMPLETED. COMPLETED is final (empty = locked, read-only).
+ * A manual step can only move forward: PENDING -> INITIATED, INITIATED ->
+ * IN PROGRESS or COMPLETED, and IN PROGRESS -> COMPLETED.
  */
 export function nextStatusOptions(status: ActionStatus): ActionStatus[] {
   switch (status) {
-    case "PENDING": return ["IN PROGRESS", "COMPLETED"];
+    case "PENDING": return ["INITIATED"];
+    case "INITIATED": return ["IN PROGRESS", "COMPLETED"];
     case "IN PROGRESS": return ["COMPLETED"];
     case "COMPLETED": return [];
   }
@@ -71,10 +75,10 @@ const SCENARIOS: ScenarioSeed[] = [
     scenarioType: "IUT", seq: 1, plant: "UTR to U535", material: "11100345",
     quantity: "5250 KG", executionStatus: "IN PROGRESS",
     steps: [
-      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: 0, status: "IN PROGRESS", automated: false },
+      { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: 0, status: "COMPLETED", automated: false },
       { description: "Source Plant Approval", owner: "Source Factory Planner", slaHrs: 48, ageingDays: 1, status: "IN PROGRESS", automated: false },
       { description: "Destination Plant Approval", owner: "Destination Factory Planner", slaHrs: 48, ageingDays: 2, status: "IN PROGRESS", automated: false },
-      { description: "Create Stock Transfer Order (STO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", automated: true },
+      { description: "Create Stock Transfer Order (STO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "INITIATED", automated: true },
       { description: "Status of Dispatched Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", automated: true },
     ],
   },
@@ -94,7 +98,7 @@ const SCENARIOS: ScenarioSeed[] = [
     quantity: "100 Ton", executionStatus: "NOT STARTED",
     steps: [
       { description: "Share Scenario Summary", owner: "Network Planner", slaHrs: 24, ageingDays: null, status: "PENDING", automated: false },
-      { description: "Vendor Confirmation", owner: "Procurement Planner", slaHrs: 48, ageingDays: null, status: "PENDING", automated: false },
+      { description: "Vendor Confirmation", owner: "Procurement Planner", slaHrs: 48, ageingDays: null, status: "INITIATED", automated: false },
       { description: "Create Purchase Order (PO)", owner: "Automated (SAP)", slaHrs: 4, ageingDays: null, status: "PENDING", automated: true },
       { description: "Status of Inbound Material", owner: "Automated (SAP)", slaHrs: 24, ageingDays: null, status: "PENDING", automated: true },
     ],
@@ -120,14 +124,20 @@ const SCENARIOS: ScenarioSeed[] = [
   },
 ];
 
+let actionSequence = 0;
+
 export const ACTIONS_DATA: ActionRow[] = SCENARIOS.flatMap((scenario, itemIdx) => {
   const item = itemIdx + 1;
   return scenario.steps.map((step, stepIdx) => {
-    const actionId = `${item}.${stepIdx + 1}`;
+    actionSequence += 1;
+    const actionId = `ACT-${String(actionSequence).padStart(5, "0")}`;
     return {
       id: actionId,
       item,
       networkId: NETWORK_ID,
+      projectName: "Pack Change — South Zone",
+      oldCbuCode: "VAFA1R",
+      newCbuCode: "VAFG1R",
       seq: scenario.seq,
       scenarioType: scenario.scenarioType,
       plant: scenario.plant,
@@ -166,23 +176,29 @@ export function uniqueSorted(values: string[]): string[] {
 }
 
 export const SCENARIO_TYPE_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.scenarioType))];
+export const ACTION_ID_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.actionId))];
+export const NETWORK_ID_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.networkId))];
 export const PLANT_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.plant))];
 export const MATERIAL_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.material))];
 export const OWNER_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.owner))];
 export const STATUS_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.status))];
+export const PROJECT_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.projectName))];
+export const OLD_CBU_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.oldCbuCode))];
+export const NEW_CBU_OPTIONS = ["All", ...uniqueSorted(ACTIONS_DATA.map((r) => r.newCbuCode))];
 
 // ─── Display helpers ────────────────────────────────────────────────────────
 
 export const STATUS_THEME: Record<ActionStatus, { bg: string; text: string; dot: string }> = {
-  "PENDING":     { bg: "#f3f4f6", text: "#6b7280", dot: "#9ca3af" },
+  "PENDING": { bg: "#f3f4f6", text: "#6b7280", dot: "#9ca3af" },
+  "INITIATED": { bg: "#fef3c7", text: "#b45309", dot: "#f59e0b" },
   "IN PROGRESS": { bg: "#dbeafe", text: "#1565C0", dot: "#1565C0" },
-  "COMPLETED":   { bg: "#e0f2f1", text: "#00695C", dot: "#00897B" },
+  "COMPLETED": { bg: "#e0f2f1", text: "#00695C", dot: "#00897B" },
 };
 
 export const EXECUTION_STATUS_THEME: Record<ExecutionStatus, { bg: string; text: string }> = {
   "IN PROGRESS": { bg: "#dbeafe", text: "#1565C0" },
   "NOT STARTED": { bg: "#f3f4f6", text: "#6b7280" },
-  "COMPLETED":   { bg: "#dcfce7", text: "#15803d" },
+  "COMPLETED": { bg: "#dcfce7", text: "#15803d" },
 };
 
 export function ageingColor(days: number | null): string {

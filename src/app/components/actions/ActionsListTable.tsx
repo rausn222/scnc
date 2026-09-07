@@ -9,7 +9,7 @@ const BORDER = "#e2e8f0";
 const HEAD_BG = "#003087";
 
 const COLS = [
-  { label: "Action number", width: 60, align: "left" as const },
+  { label: "Action ID", width: 90, align: "left" as const },
   { label: "Network ID", width: 140, align: "left" as const },
   { label: "Scenario type", width: 120, align: "left" as const },
   { label: "Source plant", width: 100, align: "left" as const },
@@ -49,7 +49,7 @@ export function ActionsListTable({ rows, onDecision }: Props) {
   }
 
   return (
-    <div className="overflow-auto shadow-lg" style={{ border: "1px solid #d1d5db" }}>
+    <div className="actions-list-scroll h-full min-h-0 overflow-x-auto overflow-y-auto shadow-lg" style={{ border: "1px solid #d1d5db" }}>
       <table className="text-xs border-collapse w-full" style={{ minWidth: 1450 }}>
         <thead>
           <tr style={{ backgroundColor: HEAD_BG }} className="text-white">
@@ -71,9 +71,9 @@ export function ActionsListTable({ rows, onDecision }: Props) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
+          {rows.map((row) => (
             <Fragment key={row.id}>
-              <ActionListRow index={i + 1} row={row} onDecision={onDecision} />
+              <ActionListRow row={row} onDecision={onDecision} />
             </Fragment>
           ))}
         </tbody>
@@ -90,11 +90,9 @@ export function ActionsListTable({ rows, onDecision }: Props) {
 }
 
 function ActionListRow({
-  index,
   row,
   onDecision,
 }: {
-  index: number;
   row: ActionRow;
   onDecision: (rowId: string, action: string) => void;
 }) {
@@ -102,7 +100,7 @@ function ActionListRow({
   return (
     <tr style={{ backgroundColor: "#ffffff" }} className="hover:bg-blue-50 transition-colors">
       <td className="px-3 py-2.5 font-semibold whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}`, color: "#334155" }}>
-        {index}
+        {row.actionId}
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ borderRight: `1px solid ${BORDER}`, color: "#1565C0" }}>
         {row.networkId}

@@ -68,7 +68,8 @@ export function PageHeader({
                           <button
                             type="button"
                             onClick={item.onClick}
-                            className="transition-colors hover:underline"
+                            title={`Go to ${item.label}`}
+                            className="transition-colors hover:underline cursor-pointer"
                             style={{ color: "#ffffffcc" }}
                           >
                             {item.label}

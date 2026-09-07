@@ -20,11 +20,8 @@ export type FilterId =
   | "uom"
   | "brand"
   | "materialCode"
-  | "materialDescription"
   | "cbuCode"
-  | "cbuDescription"
-  | "basePack"
-  | "basePackDescription";
+  | "basePack";
 
 export interface FilterDefinition {
   id: FilterId;
@@ -33,43 +30,33 @@ export interface FilterDefinition {
 }
 
 export const ALL_FILTER_DEFINITIONS: FilterDefinition[] = [
-  { id: "bg", label: "BG", kind: "dropdown" },
+  { id: "materialCode", label: "Material", kind: "dropdown" },
+  { id: "cbuCode", label: "CBU", kind: "dropdown" },
+  { id: "basePack", label: "Base Pack", kind: "dropdown" },
   { id: "smallC", label: "SMALL C", kind: "dropdown" },
+  { id: "bg", label: "BG", kind: "dropdown" },
   { id: "format", label: "FORMAT", kind: "dropdown" },
+  { id: "brand", label: "Brand", kind: "dropdown" },
   { id: "materialType", label: "Material Type", kind: "toggle" },
   { id: "uom", label: "UOM", kind: "toggle" },
-  { id: "brand", label: "Brand", kind: "dropdown" },
-  { id: "materialCode", label: "Material Code", kind: "dropdown" },
-  {
-    id: "materialDescription",
-    label: "Material Description",
-    kind: "dropdown",
-  },
-  { id: "cbuCode", label: "CBU Code", kind: "dropdown" },
-  { id: "cbuDescription", label: "CBU Description", kind: "dropdown" },
-  { id: "basePack", label: "Base Pack", kind: "dropdown" },
-  {
-    id: "basePackDescription",
-    label: "Base Pack Description",
-    kind: "dropdown",
-  },
 ];
 
 export const DEFAULT_FILTER_ORDER: FilterId[] = ALL_FILTER_DEFINITIONS.map(
   (f) => f.id,
 );
 
-export const MAX_VISIBLE_FILTERS = 6;
+export const MAX_VISIBLE_FILTERS = ALL_FILTER_DEFINITIONS.length;
 
 export const DEFAULT_VISIBLE_FILTER_IDS: FilterId[] = [
-  "bg",
+  "materialCode",
+  "cbuCode",
+  "basePack",
   "smallC",
+  "bg",
   "format",
+  "brand",
   "materialType",
   "uom",
-  "brand",
-  "basePack",
-  "basePackDescription"
 ];
 
 const FILTER_LABEL: Record<FilterId, string> = Object.fromEntries(
@@ -176,7 +163,7 @@ export function MoreFiltersPanel({
       <motion.button
         whileTap={{ scale: 0.95 }}
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors"
         style={{
           backgroundColor: open
             ? "rgba(21,101,192,0.14)"
@@ -260,7 +247,7 @@ export function MoreFiltersPanel({
             <button
               type="button"
               onClick={resetFilters}
-              className="flex items-center gap-1 text-xs"
+              className="flex items-center gap-1 text-xs cursor-pointer"
               style={{
                 color: "#1565C0",
                 fontFamily: "'JetBrains Mono', monospace",
@@ -348,7 +335,7 @@ export function MoreFiltersPanel({
                   <button
                     type="button"
                     onClick={() => toggleVisibility(id)}
-                    className="shrink-0"
+                    className="shrink-0 cursor-pointer"
                     style={{ color: "#1565C0" }}
                     title={isVisible ? "Hide from toolbar" : "Show in toolbar"}
                   >
@@ -407,7 +394,7 @@ export function MoreFiltersPanel({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-xs px-3 py-1 rounded-lg"
+              className="text-xs px-3 py-1 rounded-lg cursor-pointer"
               style={{
                 backgroundColor: "#EDF5FA",
                 color: "#374151",

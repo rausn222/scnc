@@ -1,15 +1,17 @@
-import { Fragment, useMemo, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { ArrowRight, ChevronDown, ChevronRight, ChevronUp, X } from "lucide-react";
 import {
   ageingColor,
   EXECUTION_STATUS_THEME,
   formatRoute,
   scenarioLabel,
   type ActionRow,
-  type ActionStatus,
 } from "./actionsData";
 import { StatusDropdownCell } from "./StatusDropdownCell";
 import { EmailActionCell } from "./EmailActionCell";
+import { TrackingOverviewSection } from "../tracking/TrackingOverviewSection";
+import type { AcceptedScenarioDetails } from "../../App";
+import { TablePagination } from "../nationalDashboard/TablePagination";
 
 type SortCol = "actionId" | "owner" | "slaHrs" | "ageingDays" | "status" | null;
 type SortDir = "asc" | "desc";
@@ -20,19 +22,30 @@ const HEAD_BG = "#003087";
 const BAND_BG = "#EDF1F7";
 const BAND_ACCENT = "#1565C0";
 
+export const REQUIRED_TRACKING_COLUMNS = new Set([
+  "networkId",
+  "scenarioType",
+  "actionId",
+  "description",
+  "status",
+  "action",
+]);
+
 const ACTION_COLS: Array<{
+  id: string;
   label: string;
   width: number;
   align: "left" | "right";
   sort?: Exclude<SortCol, null>;
 }> = [
-  { label: "Action ID", width: 100, align: "left", sort: "actionId" },
-  { label: "Description", width: 240, align: "left" },
-  { label: "Owner", width: 170, align: "left", sort: "owner" },
-  { label: "SLA", width: 76, align: "right", sort: "slaHrs" },
-  { label: "Ageing", width: 76, align: "right", sort: "ageingDays" },
-  { label: "Status", width: 120, align: "left", sort: "status" },
-  { label: "Action", width: 130, align: "left" },
+  { id: "networkId", label: "Network ID", width: 76, align: "left" },
+  { id: "actionId", label: "Action ID", width: 110, align: "left", sort: "actionId" },
+  { id: "description", label: "Description", width: 240, align: "left" },
+  { id: "owner", label: "Action Owner", width: 170, align: "left", sort: "owner" },
+    { id: "sla", label: "SLA", width: 76, align: "left", sort: "slaHrs" },
+    { id: "ageing", label: "Ageing", width: 76, align: "left", sort: "ageingDays" },
+  { id: "status", label: "Status", width: 120, align: "left", sort: "status" },
+  { id: "action", label: "Action", width: 130, align: "left" },
 ];
 
 function SortHeader({
@@ -55,9 +68,10 @@ function SortHeader({
     <button
       type="button"
       onClick={() => onSort(col)}
-      className={`inline-flex items-center gap-1 select-none cursor-pointer text-xs font-semibold ${align === "right" ? "flex-row-reverse" : ""}`}
+      className={`inline-flex items-center justify-${align === "right" ? "end" : "start"} gap-1 select-none cursor-pointer text-xs font-semibold`}
+      style={{ width: "100%" }}
     >
-      {label}
+      <span>{label}</span>
       <span className="inline-flex flex-col leading-none" style={{ opacity: active ? 1 : 0.4 }}>
         {active && sortDir === "desc" ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
       </span>
@@ -80,17 +94,19 @@ function ScenarioBand({
   count,
   collapsed,
   onToggle,
+  colSpan,
 }: {
   row: ActionRow;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
+  colSpan: number;
 }) {
   const exec = EXECUTION_STATUS_THEME[row.executionStatus];
   return (
     <tr>
       <td
-        colSpan={ACTION_COLS.length}
+        colSpan={colSpan}
         className="px-3 pr-6 py-2 cursor-pointer select-none"
         style={{ backgroundColor: BAND_BG, borderLeft: `4px solid ${BAND_ACCENT}`, borderBottom: `1px solid ${BORDER}` }}
         onClick={onToggle}
@@ -153,12 +169,23 @@ function ScenarioBand({
 interface Props {
   rows: ActionRow[];
   onDecision: (rowId: string, action: string) => void;
+  hiddenColumns?: Set<string>;
+  overviewScenario?: AcceptedScenarioDetails;
+  overviewDeviations?: string[];
+  onResimulate?: () => void;
 }
 
-export function ActionsTable({ rows, onDecision }: Props) {
+export function ActionsTable({ rows, onDecision, hiddenColumns = new Set(), overviewScenario, overviewDeviations = [], onResimulate = () => undefined }: Readonly<Props>) {
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [collapsedItems, setCollapsedItems] = useState<Set<number>>(new Set());
+  const [overviewNetworkId, setOverviewNetworkId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+
+  useEffect(() => {
+    setPage(1);
+  }, [rows, sortCol, sortDir, rowsPerPage]);
 
   function toggleItem(item: number) {
     setCollapsedItems((prev) => {
@@ -177,11 +204,8 @@ export function ActionsTable({ rows, onDecision }: Props) {
     }
   }
 
-  // Unsorted: rows stay grouped under one banner per unique scenario instance
-  // (e.g. "IUT 1", "IUT 2") so every distinct lane/request is visually
-  // combined and its action trail reads directly underneath it. Sorting by
-  // an action-level column breaks that grouping, so it falls back to a flat
-  // list with an inline scenario tag per row instead.
+  // Rows stay grouped under one banner per unique scenario instance so the
+  // Network ID and Scenario Type cells remain merged while sorting.
   const sortedRows = useMemo(() => {
     if (!sortCol) return rows;
     const copy = [...rows];
@@ -195,14 +219,6 @@ export function ActionsTable({ rows, onDecision }: Props) {
     return copy;
   }, [rows, sortCol, sortDir]);
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<ActionStatus, number> = {
-      PENDING: 0, "IN PROGRESS": 0, COMPLETED: 0,
-    };
-    for (const r of rows) counts[r.status]++;
-    return counts;
-  }, [rows]);
-
   if (rows.length === 0) {
     return (
       <div
@@ -214,25 +230,36 @@ export function ActionsTable({ rows, onDecision }: Props) {
     );
   }
 
-  const grouped = sortCol ? null : groupByItem(sortedRows);
-  const colCount = ACTION_COLS.length + (sortCol ? 1 : 0);
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / rowsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = sortedRows.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+  const pagedGrouped = groupByItem(pagedRows);
+  const showScenarioColumn = !hiddenColumns.has("scenario");
+  const visibleActionCols = ACTION_COLS.filter((col) => REQUIRED_TRACKING_COLUMNS.has(col.id) || !hiddenColumns.has(col.id));
+  const visibleNonNetworkCols = visibleActionCols.filter((col) => col.id !== "networkId");
+  const colCount = visibleActionCols.length + (showScenarioColumn ? 1 : 0);
 
   return (
-    <div className="overflow-auto shadow-lg" style={{ border: "1px solid #d1d5db" }}>
-      <table className="text-xs border-collapse w-full" style={{ minWidth: sortCol ? 1350 : 1180 }}>
-        <thead>
+    <div className="flex h-full min-h-0 flex-col" style={{ border: "1px solid #d1d5db" }}>
+      <div className="min-h-0 flex-1 overflow-auto shadow-lg">
+      <table className="text-xs border-collapse w-full" style={{ minWidth: showScenarioColumn ? 1390 : 1180 }}>
+        <thead className="sticky top-0 z-20" style={{ backgroundColor: HEAD_BG }}>
           <tr style={{ backgroundColor: HEAD_BG }} className="text-white">
-            {sortCol && (
-              <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap" style={{ borderRight: "1px solid rgba(255,255,255,0.15)", position: "sticky", top: 0, zIndex: 21, minWidth: 190 }}>
-                Scenario
+            <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap" style={{ backgroundColor: HEAD_BG, borderRight: "1px solid rgba(255,255,255,0.15)", position: "sticky", top: 0, zIndex: 21, minWidth: 100 }}>
+              Network ID
+            </th>
+            {showScenarioColumn && (
+              <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap" style={{ backgroundColor: HEAD_BG, borderRight: "1px solid rgba(255,255,255,0.15)", position: "sticky", top: 0, zIndex: 21, minWidth: 220 }}>
+                Scenario Type
               </th>
             )}
-            {ACTION_COLS.map((col, i) => (
+            {visibleNonNetworkCols.map((col, i) => (
               <th
                 key={col.label}
-                className={`px-3 py-2.5 font-semibold whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${i === ACTION_COLS.length - 1 ? "pr-6" : ""}`}
+                className={`px-3 py-2.5 font-semibold whitespace-nowrap ${col.align === "right" ? "text-right" : "text-left"} ${i === visibleNonNetworkCols.length - 1 ? "pr-6" : ""}`}
                 style={{
-                  borderRight: i < ACTION_COLS.length - 1 ? "1px solid rgba(255,255,255,0.15)" : undefined,
+                  backgroundColor: HEAD_BG,
+                  borderRight: i < visibleNonNetworkCols.length - 1 ? "1px solid rgba(255,255,255,0.15)" : undefined,
                   position: "sticky",
                   top: 0,
                   zIndex: 21,
@@ -242,52 +269,89 @@ export function ActionsTable({ rows, onDecision }: Props) {
                 {col.sort ? (
                   <SortHeader label={col.label} col={col.sort} sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align={col.align} />
                 ) : (
-                  col.label
+                  <span className="inline-flex items-center w-full justify-start">{col.label}</span>
                 )}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {grouped
-            ? grouped.map(([item, groupRows]) => {
+          {pagedGrouped
+            ? pagedGrouped.map(([item, groupRows]) => {
                 const collapsed = collapsedItems.has(item);
+                if (collapsed) {
+                  return (
+                    <Fragment key={item}>
+                        <ScenarioBand
+                        row={groupRows[0]}
+                        count={groupRows.length}
+                        collapsed={collapsed}
+                        onToggle={() => toggleItem(item)}
+                          colSpan={colCount}
+                      />
+                    </Fragment>
+                  );
+                }
+
                 return (
                   <Fragment key={item}>
-                    <ScenarioBand
-                      row={groupRows[0]}
-                      count={groupRows.length}
-                      collapsed={collapsed}
-                      onToggle={() => toggleItem(item)}
-                    />
-                    {!collapsed &&
-                      groupRows.map((row) => (
-                        <ActionRowLine key={row.id} row={row} onDecision={onDecision} />
-                      ))}
+                    <tr className="group-row-outline" style={{ height: 0 }}>
+                      <td colSpan={colCount} style={{ height: 0, padding: 0, border: 0 }} />
+                    </tr>
+                    {groupRows.map((row, index) => (
+                      <ActionRowLine
+                        key={row.id}
+                        row={row}
+                        onDecision={onDecision}
+                        hiddenColumns={hiddenColumns}
+                        onNetworkClick={setOverviewNetworkId}
+                        networkRowSpan={index === 0 ? groupRows.length : undefined}
+                        scenarioCell={!hiddenColumns.has("scenario") && index === 0 ? { rowSpan: groupRows.length, summary: groupRows[0] } : undefined}
+                        groupBorderTop={index === 0}
+                        groupBorderBottom={index === groupRows.length - 1}
+                      />
+                    ))}
                   </Fragment>
                 );
               })
             : sortedRows.map((row) => (
-                <ActionRowLine key={row.id} row={row} onDecision={onDecision} showScenario />
+                <ActionRowLine key={row.id} row={row} onDecision={onDecision} showScenario hiddenColumns={hiddenColumns} onNetworkClick={setOverviewNetworkId} networkRowSpan={1} />
               ))}
         </tbody>
-        <tfoot>
-          <tr style={{ backgroundColor: HEAD_BG }} className="text-white font-semibold">
-            <td colSpan={colCount} className="px-3 pr-6 py-2.5">
-              <span className="inline-flex items-center gap-4 flex-wrap">
-                <span>TOTAL — {rows.length} action{rows.length === 1 ? "" : "s"}</span>
-                {(Object.keys(statusCounts) as ActionStatus[])
-                  .filter((s) => statusCounts[s] > 0)
-                  .map((s) => (
-                    <span key={s} className="font-normal" style={{ color: "rgba(255,255,255,0.85)" }}>
-                      {s}: <span className="font-semibold text-white">{statusCounts[s]}</span>
-                    </span>
-                  ))}
-              </span>
-            </td>
-          </tr>
-        </tfoot>
       </table>
+      </div>
+      <TablePagination
+        page={safePage}
+        rowsPerPage={rowsPerPage}
+        totalRows={sortedRows.length}
+        onPageChange={setPage}
+        onRowsPerPageChange={setRowsPerPage}
+      />
+      {overviewNetworkId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4" role="dialog" aria-modal="true" aria-label="Project overview">
+          <div className="max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-xl bg-white shadow-2xl" style={{ border: `2px solid ${HEAD_BG}` }}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ backgroundColor: HEAD_BG, color: "#ffffff" }}>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#bfdbfe" }}>Project Overview</p>
+                <h2 className="mt-1 text-sm font-bold">{overviewNetworkId}</h2>
+              </div>
+              <button type="button" onClick={() => setOverviewNetworkId(null)} title="Close project overview" aria-label="Close project overview" className="flex h-8 w-8 items-center justify-center rounded-lg cursor-pointer" style={{ color: "#ffffff" }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5">
+              <TrackingOverviewSection
+                effectiveScenario={overviewScenario}
+                isManualMode={false}
+                manualScenarioId={null}
+                onManualScenarioChange={() => undefined}
+                deviations={overviewDeviations}
+                onResimulate={onResimulate}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -302,53 +366,135 @@ function groupByItem(rows: ActionRow[]): Array<[number, ActionRow[]]> {
   return Array.from(map.entries());
 }
 
+function ScenarioSummaryCell({ row, count }: { row: ActionRow; count?: number }) {
+  const route = formatRoute(row.plant);
+  const countLabel = count ? `${count} action${count === 1 ? "" : "s"}` : "1 action";
+
+  return (
+    <td
+      className="px-3 py-3 align-top"
+      rowSpan={count ?? 1}
+      style={{
+        width: 210,
+        borderLeft: `1px solid ${HEAD_BG}`,
+        borderRight: `1px solid ${BORDER}`,
+        borderTop: `1px solid ${HEAD_BG}`,
+        borderBottom: `1px solid ${HEAD_BG}`,
+        backgroundColor: "#f8fbff",
+        verticalAlign: "middle",
+      }}
+    >
+      <div className="flex h-full min-h-[82px] flex-col justify-center gap-1.5 pt-2">
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex items-center rounded px-2 py-1 font-bold text-[11px] leading-none tracking-wide"
+            style={{ backgroundColor: BAND_ACCENT, color: "#ffffff" }}
+          >
+            {scenarioLabel(row.scenarioType, row.seq)}
+          </span>
+          <span className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "#64748b" }}>
+            {countLabel}
+          </span>
+        </div>
+
+        <div className="space-y-1 text-sm" style={{ color: "#475569" }}>
+          <div>
+            <span className="font-semibold" style={{ color: "#0f172a" }}>Scenario:</span>{" "}
+            <span className="font-medium" style={{ color: "#1f2937" }}>{scenarioLabel(row.scenarioType, row.seq)}</span>
+          </div>
+          <div>
+            <span className="font-semibold" style={{ color: "#0f172a" }}>Route:</span>{" "}
+            <span className="font-medium" style={{ color: "#1f2937" }}>{route}</span>
+          </div>
+          <div>
+            <span className="font-semibold" style={{ color: "#0f172a" }}>Material:</span>{" "}
+            <span className="font-medium" style={{ color: "#1f2937" }}>{row.material}</span>
+          </div>
+          <div>
+            <span className="font-semibold" style={{ color: "#0f172a" }}>Qty:</span>{" "}
+            <span className="font-medium" style={{ color: "#1f2937" }}>{row.quantity}</span>
+          </div>
+        </div>
+      </div>
+    </td>
+  );
+}
+
 function ActionRowLine({
   row,
   onDecision,
   showScenario = false,
+  scenarioCell,
+  groupBorderTop = false,
+  groupBorderBottom = false,
+  hiddenColumns,
+  onNetworkClick,
+  networkRowSpan,
 }: {
   row: ActionRow;
   onDecision: (rowId: string, action: string) => void;
   showScenario?: boolean;
+  scenarioCell?: { rowSpan: number; summary: ActionRow };
+  groupBorderTop?: boolean;
+  groupBorderBottom?: boolean;
+  hiddenColumns: Set<string>;
+  onNetworkClick: (networkId: string) => void;
+  networkRowSpan?: number;
 }) {
+  const firstCell = showScenario ? (
+    <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}` }}>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className="inline-flex items-center px-1.5 py-0.5 rounded font-bold text-xs"
+          style={{ backgroundColor: BAND_ACCENT, color: "#ffffff" }}
+        >
+          {scenarioLabel(row.scenarioType, row.seq)}
+        </span>
+        <span className="text-xs" style={{ color: "#5b6b85" }}>
+          {formatRoute(row.plant)}
+        </span>
+      </span>
+    </td>
+  ) : scenarioCell ? (
+    <ScenarioSummaryCell row={scenarioCell.summary} count={scenarioCell.rowSpan} />
+  ) : null;
+
   return (
-    <tr style={{ backgroundColor: "#ffffff" }} className="hover:bg-blue-50 transition-colors">
-      {showScenario && (
-        <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}` }}>
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              className="inline-flex items-center px-1.5 py-0.5 rounded font-bold text-xs"
-              style={{ backgroundColor: BAND_ACCENT, color: "#ffffff" }}
-            >
-              {scenarioLabel(row.scenarioType, row.seq)}
-            </span>
-            <span className="text-xs" style={{ color: "#5b6b85" }}>
-              {formatRoute(row.plant)}
-            </span>
-          </span>
-        </td>
-      )}
-      <td className="px-3 py-2.5 font-semibold whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}`, color: "#1565C0" }}>
+    <tr
+      style={{
+        backgroundColor: "#ffffff",
+        borderTop: groupBorderTop ? `1px solid ${HEAD_BG}` : "1px solid #dfe7f3",
+        borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3",
+      }}
+      className="hover:bg-blue-50 transition-colors"
+    >
+      {networkRowSpan && <td rowSpan={networkRowSpan} className="px-3 py-2.5 whitespace-nowrap font-semibold align-middle" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3", color: "#1565C0", textAlign: "left", backgroundColor: "#f8fbff" }}>
+        <button type="button" onClick={() => onNetworkClick(row.networkId)} className="cursor-pointer text-xs font-semibold underline underline-offset-2" title="View project overview">
+          {row.networkId}
+        </button>
+      </td>}
+      {firstCell}
+      {(REQUIRED_TRACKING_COLUMNS.has("actionId") || !hiddenColumns.has("actionId")) && <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3", color: "#1565C0", textAlign: "left" }}>
         {row.actionId}
-      </td>
-      <td className="px-3 py-2.5" style={{ borderRight: `1px solid ${BORDER}`, color: "#111827" }}>
+      </td>}
+      {(REQUIRED_TRACKING_COLUMNS.has("description") || !hiddenColumns.has("description")) && <td className="px-3 py-2.5" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3", color: "#111827" }}>
         {row.description}
-      </td>
-      <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}`, color: "#374151" }}>
+      </td>}
+      {!hiddenColumns.has("owner") && <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3", color: "#374151" }}>
         {row.owner}
-      </td>
-      <td className="px-3 py-2.5 text-right whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}`, color: "#374151" }}>
+      </td>}
+      {!hiddenColumns.has("sla") && <td className="px-3 py-2.5 whitespace-nowrap" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3", color: "#374151", textAlign: "left" }}>
         {row.slaHrs} hrs
-      </td>
-      <td className="px-3 py-2.5 text-right whitespace-nowrap font-semibold" style={{ borderRight: `1px solid ${BORDER}`, color: ageingColor(row.ageingDays) }}>
+      </td>}
+      {!hiddenColumns.has("ageing") && <td className="px-3 py-2.5 whitespace-nowrap font-semibold" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3", color: ageingColor(row.ageingDays), textAlign: "left" }}>
         {row.ageingDays === null ? "—" : `${row.ageingDays}d`}
-      </td>
-      <td className="px-3 py-2.5" style={{ borderRight: `1px solid ${BORDER}` }}>
+      </td>}
+      {(REQUIRED_TRACKING_COLUMNS.has("status") || !hiddenColumns.has("status")) && <td className="px-3 py-2.5" style={{ borderRight: `1px solid ${BORDER}`, borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3" }}>
         <StatusDropdownCell row={row} onConfirm={onDecision} />
-      </td>
-      <td className="px-3 pr-6 py-2.5">
+      </td>}
+      {(REQUIRED_TRACKING_COLUMNS.has("action") || !hiddenColumns.has("action")) && <td className="px-3 pr-6 py-2.5" style={{ borderBottom: groupBorderBottom ? `2px solid ${HEAD_BG}` : "1px solid #dfe7f3" }}>
         <EmailActionCell row={row} />
-      </td>
+      </td>}
     </tr>
   );
 }

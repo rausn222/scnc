@@ -37,6 +37,10 @@ const DECISION_THEME: Record<ActionStatus, DecisionTheme> = {
     icon: PlayCircle, verb: "Reset", banner: "#f3f4f6", border: "#e5e7eb",
     iconBg: "#e5e7eb", iconColor: "#4b5563", title: "#374151", subtitle: "#6b7280", button: "#6b7280",
   },
+  INITIATED: {
+    icon: PlayCircle, verb: "Initiate", banner: "#fffbeb", border: "#fde68a",
+    iconBg: "#fef3c7", iconColor: "#b45309", title: "#92400e", subtitle: "#b45309", button: "#b45309",
+  },
   "IN PROGRESS": {
     icon: PlayCircle, verb: "Start", banner: "#eff6ff", border: "#bfdbfe",
     iconBg: "#dbeafe", iconColor: "#1565C0", title: "#1e3a8a", subtitle: "#1d4ed8", button: "#1565C0",
@@ -49,6 +53,7 @@ const DECISION_THEME: Record<ActionStatus, DecisionTheme> = {
 
 const OPTION_LABEL: Record<ActionStatus, string> = {
   PENDING: "Pending",
+  INITIATED: "Initiated",
   "IN PROGRESS": "In Progress",
   COMPLETED: "Completed",
 };

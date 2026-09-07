@@ -13,6 +13,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Zap,
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { FilterDropdown } from "../components/FilterDropdown";
@@ -24,7 +25,7 @@ import {
   fmtMoney,
   statusColor,
   type NetworkRow,
-} from "../components/network/networkData";
+} from "../components/networkSummary/networkData";
 
 const BORDER = "#e2e8f0";
 const HEAD_BG = "#003087";
@@ -43,6 +44,7 @@ export default function NetworkSummary() {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [selectedNetworkId, setSelectedNetworkId] = useState<string>(NETWORK_DATA[0]?.networkId ?? "");
 
   function setFilter(id: keyof typeof EMPTY_FILTERS, value: string) {
     setFilters((prev) => ({ ...prev, [id]: value }));
@@ -108,7 +110,7 @@ export default function NetworkSummary() {
   ).length;
 
   function handleViewDetails(row: NetworkRow) {
-    navigate({ page: "action-detail" });
+    navigate({ page: "tracking-details" });
   }
 
   return (
@@ -141,10 +143,10 @@ export default function NetworkSummary() {
         </motion.button>
       </PageHeader>
 
-      <div className="flex-1 overflow-auto">
-        <div className="flex gap-4 p-5">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex h-full min-h-0 gap-4 p-5">
           {/* ── Main column: Overview + Network Details ── */}
-          <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-4">
             {/* Overview tiles */}
             <div className="grid grid-cols-3 gap-4 shrink-0">
               <OverviewTile
@@ -170,7 +172,7 @@ export default function NetworkSummary() {
 
             {/* Network Details */}
             <div
-              className="rounded-lg flex flex-col overflow-hidden"
+              className="rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden"
               style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
             >
               <div className="px-4 py-3" style={{ borderBottom: `1px solid ${BORDER}` }}>
@@ -239,7 +241,14 @@ export default function NetworkSummary() {
               </div>
 
               {/* Table */}
-              <NetworkDetailsTable rows={paginatedRows} onViewDetails={handleViewDetails} />
+              <NetworkDetailsTable
+                rows={paginatedRows}
+                onViewDetails={handleViewDetails}
+                onDeviationClick={(row) => {
+                  setSelectedNetworkId(row.networkId);
+                  setPanelCollapsed(false);
+                }}
+              />
 
               {/* Pagination */}
               <TablePagination
@@ -267,7 +276,10 @@ export default function NetworkSummary() {
             </div>
           ) : (
             <div className="w-[320px] shrink-0">
-              <NetworkMonitoringPanel onCollapse={() => setPanelCollapsed(true)} />
+              <NetworkMonitoringPanel
+                selectedNetworkId={selectedNetworkId}
+                onCollapse={() => setPanelCollapsed(true)}
+              />
             </div>
           )}
         </div>
@@ -329,21 +341,23 @@ const COLS = [
   { label: "Project Name", width: 200 },
   { label: "Status", width: 100 },
   { label: "Selected Scenario", width: 190 },
-  { label: "Old CBU Count", width: 100, align: "right" as const },
-  { label: "Business Waste", width: 110, align: "right" as const },
-  { label: "Total Cost", width: 100, align: "right" as const },
-  { label: "Benefit", width: 150 },
+  { label: "Old CBU Count", width: 100 },
+  { label: "Business Waste", width: 110 },
+  { label: "Total Cost", width: 100 },
+  // { label: "Benefit", width: 150 },
   { label: "Production Stop Date", width: 150 },
-  { label: "Deviation Count", width: 110, align: "right" as const },
-  { label: "View Details", width: 90, align: "center" as const },
+  { label: "Deviation Count", width: 110 },
+  { label: "View Details", width: 90 },
 ];
 
 function NetworkDetailsTable({
   rows,
   onViewDetails,
+  onDeviationClick,
 }: {
   rows: NetworkRow[];
   onViewDetails: (row: NetworkRow) => void;
+  onDeviationClick: (row: NetworkRow) => void;
 }) {
   if (rows.length === 0) {
     return (
@@ -357,19 +371,21 @@ function NetworkDetailsTable({
   }
 
   return (
-    <div className="overflow-auto">
+    <div className="flex-1 min-h-0 overflow-auto">
       <table className="text-xs border-collapse w-full" style={{ minWidth: 1500 }}>
-        <thead>
+        <thead className="sticky top-0 z-20">
           <tr style={{ backgroundColor: HEAD_BG }} className="text-white">
             {COLS.map((col, i) => (
               <th
                 key={col.label}
-                className={`px-3 py-2.5 font-semibold whitespace-nowrap ${
-                  col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
-                }`}
+                className="px-3 py-2.5 font-semibold whitespace-nowrap text-left"
                 style={{
                   borderRight: i < COLS.length - 1 ? "1px solid rgba(255,255,255,0.15)" : undefined,
                   minWidth: col.width,
+                  position: i === 0 ? "sticky" : undefined,
+                  left: i === 0 ? 0 : undefined,
+                  zIndex: i === 0 ? 31 : undefined,
+                  backgroundColor: HEAD_BG,
                 }}
               >
                 {col.label}
@@ -388,7 +404,7 @@ function NetworkDetailsTable({
               >
                 <td
                   className="px-3 py-2.5 whitespace-nowrap font-semibold"
-                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#1565C0" }}
+                  style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#1565C0", position: "sticky", left: 0, zIndex: 10, backgroundColor: "#ffffff", boxShadow: "2px 0 4px rgba(15,23,42,0.08)" }}
                 >
                   {row.networkId}
                 </td>
@@ -416,29 +432,29 @@ function NetworkDetailsTable({
                   {row.selectedScenario}
                 </td>
                 <td
-                  className="px-3 py-2.5 text-right whitespace-nowrap"
+                  className="px-3 py-2.5 whitespace-nowrap"
                   style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
                 >
                   {row.oldCbuCount}
                 </td>
                 <td
-                  className="px-3 py-2.5 text-right whitespace-nowrap"
+                  className="px-3 py-2.5 whitespace-nowrap"
                   style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
                 >
                   {fmtMoney(row.businessWaste)}
                 </td>
                 <td
-                  className="px-3 py-2.5 text-right whitespace-nowrap"
+                  className="px-3 py-2.5 whitespace-nowrap"
                   style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
                 >
                   {fmtMoney(row.totalCost)}
                 </td>
-                <td
+                {/* <td
                   className="px-3 py-2.5 whitespace-nowrap"
                   style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
                 >
                   {row.benefit}
-                </td>
+                </td> */}
                 <td
                   className="px-3 py-2.5 whitespace-nowrap"
                   style={{ borderRight: `1px solid ${BORDER}`, borderTop: `1px solid ${BORDER}`, color: "#374151" }}
@@ -446,17 +462,29 @@ function NetworkDetailsTable({
                   {row.productionStopDate}
                 </td>
                 <td
-                  className="px-3 py-2.5 text-right whitespace-nowrap font-semibold"
+                  className="px-3 py-2.5 whitespace-nowrap font-semibold"
                   style={{
                     borderRight: `1px solid ${BORDER}`,
                     borderTop: `1px solid ${BORDER}`,
-                    color: row.deviationCount ? "#b91c1c" : "#9ca3af",
+                    color: row.deviationCount ? "#1565C0" : "#9ca3af",
                   }}
                 >
-                  {row.deviationCount ?? "NA"}
+                  {(row.deviationCount ?? 0) > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onDeviationClick(row)}
+                      title="View network deviations"
+                      className="font-semibold underline decoration-dotted underline-offset-2 cursor-pointer"
+                      style={{ color: "#1565C0" }}
+                    >
+                      {row.deviationCount}
+                    </button>
+                  ) : (
+                    "NA"
+                  )}
                 </td>
                 <td
-                  className="px-3 py-2.5 text-center"
+                  className="px-3 py-2.5 text-left"
                   style={{ borderTop: `1px solid ${BORDER}` }}
                 >
                   <button
@@ -599,9 +627,15 @@ function getVisiblePages(page: number, totalPages: number): Array<number | "elli
 
 // ─── Right panel: Network Monitoring ─────────────────────────────────────────
 
-function NetworkMonitoringPanel({ onCollapse }: { onCollapse: () => void }) {
+function NetworkMonitoringPanel({
+  selectedNetworkId,
+  onCollapse,
+}: {
+  selectedNetworkId: string;
+  onCollapse: () => void;
+}) {
   const { navigate } = useNav();
-  const monitored = NETWORK_DATA.find((r) => (r.deviationCount ?? 0) > 0) ?? NETWORK_DATA[0];
+  const monitored = NETWORK_DATA.find((r) => r.networkId === selectedNetworkId) ?? NETWORK_DATA[0];
   const progressPct = 50;
   const deviations = ["Action item delay", "Production plan change"];
 
@@ -610,13 +644,13 @@ function NetworkMonitoringPanel({ onCollapse }: { onCollapse: () => void }) {
       className="rounded-lg overflow-hidden sticky top-0"
       style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
     >
-      <div
-        className="px-4 py-3 flex items-center justify-between"
-        style={{ backgroundColor: "#fef9e7", borderBottom: "1px solid #fde8b0" }}
-      >
-        <span className="text-xs font-bold" style={{ color: "#92610f" }}>
-          Network Monitoring
-        </span>
+      <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderBottom: "1px solid #e2e8f0" }}>
+        <div className="flex flex-row gap-1">
+          <Zap size={14} color="blue" />
+          <span className="text-xs font-bold uppercase tracking-wide text-blue-950">
+           Network Monitoring
+          </span>
+        </div>
         <button
           type="button"
           onClick={onCollapse}
@@ -633,14 +667,13 @@ function NetworkMonitoringPanel({ onCollapse }: { onCollapse: () => void }) {
           <ChevronsRight size={14} />
         </button>
       </div>
-
       <div className="p-4 flex flex-col gap-3">
         <MonitorField
           label="Network ID"
           value={
             <button
               type="button"
-              onClick={() => navigate({ page: "action-detail" })}
+              onClick={() => navigate({ page: "tracking-details" })}
               className="font-semibold hover:underline cursor-pointer"
               style={{ color: "#1565C0" }}
             >
@@ -673,7 +706,7 @@ function NetworkMonitoringPanel({ onCollapse }: { onCollapse: () => void }) {
         <MonitorField
           label="Deviations Count"
           value={
-            <span className="font-semibold" style={{ color: "#b91c1c" }}>
+            <span className="font-semibold" style={{ color: "#1565C0" }}>
               {monitored.deviationCount ?? 0}
             </span>
           }
@@ -693,7 +726,7 @@ function NetworkMonitoringPanel({ onCollapse }: { onCollapse: () => void }) {
 
         <button
           type="button"
-          onClick={() => navigate({ page: "action-detail" })}
+          onClick={() => navigate({ page: "tracking-details" })}
           className="text-xs font-semibold text-left hover:underline cursor-pointer"
           style={{ color: "#1565C0" }}
         >
@@ -701,14 +734,14 @@ function NetworkMonitoringPanel({ onCollapse }: { onCollapse: () => void }) {
         </button>
       </div>
 
-      <div className="px-4 py-3 flex flex-col gap-1.5" style={{ borderTop: `1px solid ${BORDER}` }}>
+      {/* <div className="px-4 py-3 flex flex-col gap-1.5" style={{ borderTop: `1px solid ${BORDER}` }}>
         <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#6b7280" }}>
           Legend
         </span>
         <LegendRow color="#ef4444" label="At Risk" />
         <LegendRow color="#f59e0b" label="In progress" />
         <LegendRow color="#22c55e" label="On-track / Completed" />
-      </div>
+      </div> */}
     </div>
   );
 }

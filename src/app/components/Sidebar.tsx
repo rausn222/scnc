@@ -4,7 +4,9 @@ import { useNav } from "../App";
 import { cbuData } from "./data";
 import {
   LayoutGrid, Brain, ChevronRight, ChevronDown,
-  ChevronLeft, Network, Activity, Cpu, Zap, ClipboardList, LayoutList,
+  ChevronLeft, Network, Activity, Cpu, Zap, FolderKanban, FileText, Boxes,
+  PackagePlus, GitCompareArrows, ClipboardList,
+  File,
 } from "lucide-react";
 
 const NAV_BG     = "#003087";
@@ -23,16 +25,36 @@ interface Props {
 export function Sidebar({ collapsed, onToggleCollapse }: Props) {
   const { nav, navigate } = useNav();
   const isDashboard = nav.page === "dashboard" || nav.page === "cbu-detail";
-  const isSCI       = nav.page === "supply-chain" || nav.page === "sci-detail";
-  const isActivity  = nav.page === "action-detail";
-  const isNetworkSummary = nav.page === "network-summary";
+  const isProjects = nav.page === "project-details";
+  const isNetworkSummaryActive = nav.page === 'network-summary';
+  const isSCI = nav.page === "supply-chain" || nav.page === "sci-detail";
+  const isSCI4 = nav.page === "sci-detail4";
+  const isSCIReport = nav.page === "sci-detail-report";
+  const isNetworkDownStockingAgent = nav.page === "network-down-stocking-agent";
+  const isNetworkDownStockingAgentV2 = nav.page === "network-down-stocking-agent-v2";
+  const isNetworkDownStockingAgentV3 = nav.page === "network-down-stocking-agent-v3";
+  const isNetworkDownStockingAgentTrial = nav.page === "network-down-stocking-agent-trial";
+  const isPlantComparison = nav.page === "plant-comparison";
+  const isTrackingDetails = nav.page === "tracking-details";
   const [openPlanning, setOpenPlanning] = useState(true);
   const [openIntel,    setOpenIntel]    = useState(true);
+  const [openAgents,   setOpenAgents]   = useState(true);
+  const [hovered, setHovered] = useState(false);
+
+  // Visual expanded state: pinned open, or just previewing on hover while collapsed.
+  const showExpanded = !collapsed || hovered;
+
+  const goto = (state: Parameters<typeof navigate>[0]) => {
+    navigate(state);
+    if (!collapsed) onToggleCollapse();
+  };
 
   return (
     <motion.div
-      animate={{ width: collapsed ? COLLAPSED_W : EXPANDED_W }}
+      animate={{ width: showExpanded ? EXPANDED_W : COLLAPSED_W }}
       transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className="flex flex-col h-full shrink-0 select-none overflow-hidden relative"
       style={{
         backgroundColor: NAV_BG,
@@ -57,8 +79,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
         className="flex items-center shrink-0"
         style={{
           borderBottom: `1px solid ${NAV_BORDER}`,
-          padding: collapsed ? "18px 0" : "18px 16px",
-          justifyContent: collapsed ? "center" : "space-between",
+          padding: showExpanded ? "18px 16px" : "18px 0",
+          justifyContent: showExpanded ? "space-between" : "center",
           minHeight: 64,
         }}
       >
@@ -81,7 +103,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
           </motion.div>
 
           <AnimatePresence>
-            {!collapsed && (
+            {showExpanded && (
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -106,14 +128,14 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
         </button>
 
         <AnimatePresence>
-          {!collapsed && (
+          {showExpanded && (
             <motion.button
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={onToggleCollapse}
               title="Collapse sidebar"
-              className="w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0"
+              className="w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 cursor-pointer"
               style={{ color: "rgba(255,255,255,0.4)" }}
               whileHover={{ color: "#ffffff", backgroundColor: NAV_HOVER }}
             >
@@ -125,23 +147,29 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
 
       {/* ── Nav items ── */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden"
-        style={{ padding: collapsed ? "16px 8px" : "16px 12px" }}>
+        style={{ padding: showExpanded ? "16px 12px" : "16px 8px" }}>
 
         {/* ── Planning section ── */}
-        {collapsed ? (
+        {!showExpanded ? (
           <>
             <NavIconBtn
               active={isDashboard}
               icon={<LayoutGrid size={17} />}
               title="National Level Transition Dashboard"
-              onClick={() => navigate({ page: "dashboard" })}
+              onClick={() => goto({ page: "dashboard" })}
             />
             <NavIconBtn
-              active={isNetworkSummary}
-              icon={<LayoutList size={17} />}
-              title="Network Summary"
-              onClick={() => navigate({ page: "network-summary" })}
+              active={isProjects}
+              icon={<FolderKanban size={17} />}
+              title="Project Details"
+              onClick={() => goto({ page: "project-details" })}
               style={{ marginTop: 4 }}
+            />
+            <NavItemFull
+              active={isNetworkSummaryActive}
+              icon={<File size={15} />}
+              label="Network Summary"
+              onClick={() => goto({ page: "network-summary" })}
             />
           </>
         ) : (
@@ -164,14 +192,20 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
                     active={isDashboard}
                     icon={<LayoutGrid size={15} />}
                     label="National Level Transition Dashboard"
-                    onClick={() => navigate({ page: "dashboard" })}
+                    onClick={() => goto({ page: "dashboard" })}
                   />
                   <NavItemFull
-                    active={isNetworkSummary}
-                    icon={<LayoutList size={15} />}
-                    label="Network Summary"
-                    onClick={() => navigate({ page: "network-summary" })}
-                  />
+                    active={isProjects}
+                    icon={<FolderKanban size={15} />}
+                    label="Project Details"
+                    onClick={() => goto({ page: "project-details" })}
+                    />
+                    <NavItemFull
+                      active={isNetworkSummaryActive}
+                      icon={<File size={15} />}
+                      label="Network Summary"
+                      onClick={() => goto({ page: "network-summary" })}
+                    />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -179,21 +213,37 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
         )}
 
         {/* ── Intelligence section ── */}
-        {collapsed ? (
-          <NavIconBtn
-            active={isSCI}
-            icon={<Brain size={17} />}
-            title="Supply Chain Intelligence"
-            onClick={() => navigate({ page: "sci-detail" })}
-            style={{ marginTop: 4 }}
-          />
+        {!showExpanded ? (
+          <>
+            {/* <NavIconBtn
+              active={isSCI}
+              icon={<Brain size={17} />}
+              title="Supply Chain Intelligence"
+              onClick={() => goto({ page: "sci-detail" })}
+              style={{ marginTop: 4 }}
+            /> */}
+            {/* <NavIconBtn
+              active={isSCI4}
+              icon={<Cpu size={17} />}
+              title="Layout New"
+              onClick={() => navigate({ page: "sci-detail4" })}
+              style={{ marginTop: 4 }}
+            />
+            <NavIconBtn
+              active={isSCIReport}
+              icon={<FileText size={17} />}
+              title="Step 3 Report (new design)"
+              onClick={() => navigate({ page: "sci-detail-report" })}
+              style={{ marginTop: 4 }}
+            /> */}
+          </>
         ) : (
           <div style={{ marginTop: 16 }}>
-            <SectionHeader
+            {/* <SectionHeader
               label="Intelligence"
               open={openIntel}
               onToggle={() => setOpenIntel(p => !p)}
-            />
+            /> */}
             <AnimatePresence>
               {openIntel && (
                 <motion.div
@@ -203,35 +253,133 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
                   transition={{ duration: 0.2 }}
                   style={{ overflow: "hidden" }}
                 >
-                  <NavItemFull
+                  {/* <NavItemFull
                     active={isSCI}
                     icon={<Brain size={15} />}
                     label="Supply Chain Intelligence"
-                    onClick={() => navigate({ page: "sci-detail" })}
-                  />
+                    onClick={() => goto({ page: "sci-detail" })}
+                  /> */}
+                    {/* <NavItemFull
+                      active={isSCI4}
+                      icon={<Cpu size={15} />}
+                      label="Layout New"
+                      onClick={() => goto({ page: "sci-detail4" })}
+                    />
+                    <NavItemFull
+                      active={isSCIReport}
+                      icon={<FileText size={15} />}
+                      label="Step 3 Report (new design)"
+                      onClick={() => goto({ page: "sci-detail-report" })}
+                    /> */}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         )}
 
-        {/* ── Monitoring ── */}
-        {collapsed ? (
-          <NavIconBtn
-            active={isActivity}
-            icon={<ClipboardList size={17} />}
-            title="Activity & Monitoring"
-            onClick={() => navigate({ page: "action-detail" })}
-            style={{ marginTop: 4 }}
-          />
+        {/* ── Agents section ── */}
+        {!showExpanded ? (
+          <>
+            {/* <NavIconBtn
+              active={isNetworkDownStockingAgent}
+              icon={<Boxes size={17} />}
+              title="Network Down Stocking Agent"
+              onClick={() => goto({ page: "network-down-stocking-agent" })}
+              style={{ marginTop: 4 }}
+            /> */}
+            {/* <NavIconBtn
+              active={isNetworkDownStockingAgentV2}
+              icon={<PackagePlus size={17} />}
+              title="Network Down Stocking Agent — V2"
+              onClick={() => goto({ page: "network-down-stocking-agent-v2" })}
+              style={{ marginTop: 4 }}
+            />
+            <NavIconBtn
+              active={isNetworkDownStockingAgentV3}
+              icon={<PackagePlus size={17} />}
+              title="Network Down Stocking Agent — V3"
+              onClick={() => goto({ page: "network-down-stocking-agent-v3" })}
+              style={{ marginTop: 4 }}
+            /> */}
+            <NavIconBtn
+              active={isNetworkDownStockingAgentTrial}
+              icon={<PackagePlus size={17} />}
+              title="Network Down Stocking Simulator"
+              onClick={() => goto({ page: "network-down-stocking-agent-trial" })}
+              style={{ marginTop: 4 }}
+            />
+            {/* <NavIconBtn
+              active={isPlantComparison}
+              icon={<GitCompareArrows size={17} />}
+              title="Plant Comparison"
+              onClick={() => goto({ page: "plant-comparison" })}
+              style={{ marginTop: 4 }}
+            />
+            */}
+            <NavIconBtn
+              active={isTrackingDetails}
+              icon={<ClipboardList size={17} />}
+              title="Actions & Monitoring"
+              onClick={() => goto({ page: "tracking-details" })}
+              style={{ marginTop: 4 }}
+            />
+          </>
         ) : (
           <div style={{ marginTop: 16 }}>
-            <NavItemFull
-              active={isActivity}
-              icon={<ClipboardList size={15} />}
-              label="Activity & Monitoring"
-              onClick={() => navigate({ page: "action-detail" })}
+            <SectionHeader
+              label="Agents"
+              open={openAgents}
+              onToggle={() => setOpenAgents(p => !p)}
             />
+            <AnimatePresence>
+              {openAgents && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ overflow: "hidden" }}
+                >
+                  {/* <NavItemFull
+                    active={isNetworkDownStockingAgent}
+                    icon={<Boxes size={15} />}
+                    label="Network Down Stocking Agent"
+                    onClick={() => goto({ page: "network-down-stocking-agent" })}
+                  /> */}
+                  {/* <NavItemFull
+                    active={isNetworkDownStockingAgentV2}
+                    icon={<PackagePlus size={15} />}
+                    label="Network Down Stocking Agent — V2"
+                    onClick={() => goto({ page: "network-down-stocking-agent-v2" })}
+                  />
+                  <NavItemFull
+                    active={isNetworkDownStockingAgentV3}
+                    icon={<PackagePlus size={15} />}
+                    label="Network Down Stocking Agent — V3"
+                    onClick={() => goto({ page: "network-down-stocking-agent-v3" })}
+                  /> */}
+                  <NavItemFull
+                    active={isNetworkDownStockingAgentTrial}
+                    icon={<PackagePlus size={15} />}
+                    label="Network Down Stocking Agent Simulator"
+                    onClick={() => goto({ page: "network-down-stocking-agent-trial" })}
+                  />
+                  {/* <NavItemFull
+                    active={isPlantComparison}
+                    icon={<GitCompareArrows size={15} />}
+                    label="Plant Comparison"
+                    onClick={() => goto({ page: "plant-comparison" })}
+                  />
+                  */}
+                  <NavItemFull
+                    active={isTrackingDetails}
+                    icon={<ClipboardList size={15} />}
+                    label="Actions & Monitoring"
+                    onClick={() => goto({ page: "tracking-details" })}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </nav>
@@ -241,8 +389,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
         className="shrink-0 flex items-center gap-2"
         style={{
           borderTop: `1px solid ${NAV_BORDER}`,
-          padding: collapsed ? "12px 0" : "12px 16px",
-          justifyContent: collapsed ? "center" : "flex-start",
+          padding: showExpanded ? "12px 16px" : "12px 0",
+          justifyContent: showExpanded ? "flex-start" : "center",
         }}
       >
         <motion.div
@@ -252,7 +400,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
           <Activity size={12} style={{ color: "#90caf9", flexShrink: 0 }} />
         </motion.div>
         <AnimatePresence>
-          {!collapsed && (
+          {showExpanded && (
             <motion.span
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -267,12 +415,12 @@ export function Sidebar({ collapsed, onToggleCollapse }: Props) {
       </div>
 
       {/* ── Expand button when collapsed ── */}
-      {collapsed && (
+      {!showExpanded && (
         <motion.button
           whileHover={{ backgroundColor: NAV_HOVER }}
           onClick={onToggleCollapse}
           title="Expand sidebar"
-          className="shrink-0 flex items-center justify-center py-2 transition-colors"
+          className="shrink-0 flex items-center justify-center py-2 transition-colors cursor-pointer"
           style={{ borderTop: `1px solid ${NAV_BORDER}`, color: "rgba(255,255,255,0.4)" }}
         >
           <ChevronRight size={14} />
@@ -290,7 +438,7 @@ function SectionHeader({
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-3 rounded-md transition-colors"
+      className="w-full flex items-center justify-between px-3 rounded-md transition-colors cursor-pointer"
       style={{ paddingTop: 6, paddingBottom: 6, ...style }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = NAV_HOVER}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"}
@@ -313,7 +461,7 @@ function NavItemFull({
     <motion.button
       onClick={onClick}
       whileHover={!active ? { x: 2 } : {}}
-      className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all relative overflow-hidden"
+      className="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all relative overflow-hidden cursor-pointer"
       style={{
         backgroundColor: active ? "rgba(255,255,255,0.12)" : "transparent",
         border: active ? "1px solid rgba(255,255,255,0.2)" : "1px solid transparent",
@@ -349,7 +497,7 @@ function NavIconBtn({
       title={title}
       whileHover={!active ? { scale: 1.1 } : {}}
       whileTap={{ scale: 0.95 }}
-      className="w-full flex items-center justify-center rounded-lg transition-all"
+      className="w-full flex items-center justify-center rounded-lg transition-all cursor-pointer"
       style={{
         padding: "10px 0",
         backgroundColor: active ? "rgba(255,255,255,0.12)" : "transparent",
