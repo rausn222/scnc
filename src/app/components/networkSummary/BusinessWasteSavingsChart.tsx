@@ -49,16 +49,22 @@ function AxisTick({
   y,
   payload,
   data,
+  onNetworkClick,
 }: {
   x: number;
   y: number;
   payload: { value: string; index: number };
   data: BusinessWasteSavingsDatum[];
+  onNetworkClick?: (networkId: string) => void;
 }) {
   const datum = data[payload.index];
   if (!datum) return null;
   return (
-    <g transform={`translate(${x},${y})`}>
+    <g
+      transform={`translate(${x},${y})`}
+      onClick={onNetworkClick ? () => onNetworkClick(datum.networkId) : undefined}
+      style={onNetworkClick ? { cursor: "pointer" } : undefined}
+    >
       <text
         x={0}
         y={0}
@@ -90,12 +96,14 @@ interface BusinessWasteSavingsChartProps {
   data: BusinessWasteSavingsDatum[];
   title?: string;
   subtitle?: string;
+  onNetworkClick?: (networkId: string) => void;
 }
 
 export function BusinessWasteSavingsChart({
   data,
   title = "Business waste and savings",
   subtitle = "Top 10 networks by business waste",
+  onNetworkClick,
 }: BusinessWasteSavingsChartProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -167,7 +175,7 @@ export function BusinessWasteSavingsChart({
                   height={40}
                   axisLine={{ stroke: "#e2e8f0" }}
                   tickLine={false}
-                  tick={(props) => <AxisTick {...props} data={data} />}
+                  tick={(props) => <AxisTick {...props} data={data} onNetworkClick={onNetworkClick} />}
                 />
                 <YAxis
                   tick={{ fontSize: 10, fill: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}
@@ -194,8 +202,22 @@ export function BusinessWasteSavingsChart({
                     return d ? `${d.networkId} — ${d.projectName}` : label;
                   }}
                 />
-                <Bar dataKey="businessWaste" name="Business Waste" fill={WASTE_COLOR} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="savings" name="Savings" fill={SAVINGS_COLOR} radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="businessWaste"
+                  name="Business Waste"
+                  fill={WASTE_COLOR}
+                  radius={[4, 4, 0, 0]}
+                  className={onNetworkClick ? "cursor-pointer" : undefined}
+                  onClick={(bar) => onNetworkClick?.((bar as { payload?: BusinessWasteSavingsDatum })?.payload?.networkId ?? "")}
+                />
+                <Bar
+                  dataKey="savings"
+                  name="Savings"
+                  fill={SAVINGS_COLOR}
+                  radius={[4, 4, 0, 0]}
+                  className={onNetworkClick ? "cursor-pointer" : undefined}
+                  onClick={(bar) => onNetworkClick?.((bar as { payload?: BusinessWasteSavingsDatum })?.payload?.networkId ?? "")}
+                />
               </BarChart>
             </ResponsiveContainer>
           )}

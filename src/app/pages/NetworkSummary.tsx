@@ -35,6 +35,8 @@ const BORDER = "#e2e8f0";
 const HEAD_BG = "#003087";
 const ROWS_PER_PAGE_OPTIONS = [5, 10, 20];
 
+type ExpandedPanel = { id: string; type: "cbu" | "deviation" };
+
 const EMPTY_FILTERS = {
   status: [] as string[],
   selectedScenario: [] as string[],
@@ -84,6 +86,7 @@ export default function NetworkSummary() {
   const [hiddenFilters, setHiddenFilters] = useState<Set<string>>(
     new Set(["networkId", "projectName"]),
   );
+  const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel | null>(null);
   const moreFiltersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -209,6 +212,20 @@ export default function NetworkSummary() {
 
   function handleViewDetails(row: NetworkRow) {
     navigate({ page: "tracking-details" });
+  }
+
+  function handleChartNetworkClick(networkId: string) {
+    if (!networkId) return;
+    setFilter("networkId", [networkId]);
+    setHiddenFilters((previous) => {
+      if (!previous.has("networkId")) return previous;
+      const next = new Set(previous);
+      next.delete("networkId");
+      return next;
+    });
+    const row = NETWORK_DATA.find((r) => r.networkId === networkId);
+    const hasDeviations = (row?.deviationCount ?? 0) > 0;
+    setExpandedPanel(hasDeviations ? { id: networkId, type: "deviation" } : null);
   }
 
   return (
@@ -419,7 +436,7 @@ export default function NetworkSummary() {
           </div>
 
           {/* Business waste and savings */}
-          <BusinessWasteSavingsChart data={topBusinessWasteData} />
+          <BusinessWasteSavingsChart data={topBusinessWasteData} onNetworkClick={handleChartNetworkClick} />
 
           {/* Network Details */}
           <div
@@ -436,6 +453,8 @@ export default function NetworkSummary() {
             <NetworkDetailsTable
               rows={paginatedRows}
               onViewDetails={handleViewDetails}
+              expanded={expandedPanel}
+              onExpandedChange={setExpandedPanel}
             />
 
             {/* Pagination */}
@@ -685,16 +704,17 @@ function TableScrollbar({
   );
 }
 
-type ExpandedPanel = { id: string; type: "cbu" | "deviation" };
-
 function NetworkDetailsTable({
   rows,
   onViewDetails,
+  expanded,
+  onExpandedChange,
 }: {
   rows: NetworkRow[];
   onViewDetails: (row: NetworkRow) => void;
+  expanded: ExpandedPanel | null;
+  onExpandedChange: (next: ExpandedPanel | null) => void;
 }) {
-  const [expanded, setExpanded] = useState<ExpandedPanel | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   if (rows.length === 0) {
@@ -793,7 +813,7 @@ function NetworkDetailsTable({
                     <button
                       type="button"
                       onClick={() =>
-                        setExpanded(
+                        onExpandedChange(
                           isExpanded && expandedType === "cbu"
                             ? null
                             : { id: row.networkId, type: "cbu" },
@@ -818,7 +838,7 @@ function NetworkDetailsTable({
                       <button
                         type="button"
                         onClick={() =>
-                          setExpanded(
+                          onExpandedChange(
                             isExpanded && expandedType === "deviation"
                               ? null
                               : { id: row.networkId, type: "deviation" },
