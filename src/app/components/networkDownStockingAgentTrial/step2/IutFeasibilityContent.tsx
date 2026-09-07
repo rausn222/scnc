@@ -279,15 +279,6 @@ export function IutFeasibilityContent({
                       <div className="ml-[22px] flex flex-col gap-3">
                         {materialsWithBatches.map(({ mat, batchRows }) => (
                           <div key={mat.code}>
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <span
-                                className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0"
-                                style={{ backgroundColor: mat.type === "RM" ? RM_BADGE.bg : PM_BADGE.bg, color: mat.type === "RM" ? RM_BADGE.color : PM_BADGE.color }}
-                              >
-                                {mat.type}
-                              </span>
-                              <ComponentCodeWithDesc code={mat.code} description={mat.description} />
-                            </div>
                             <div
                               className="rounded-lg bg-white overflow-hidden divide-y divide-slate-100"
                               style={{ border: "1px solid rgba(21,101,192,0.12)" }}

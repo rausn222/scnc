@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   AlertTriangle,
+  Ban,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -195,6 +196,13 @@ export default function NetworkSummary() {
     (sum, r) => sum + (r.businessWaste ?? 0),
     0,
   );
+  const noActionNetworks = NETWORK_DATA.filter(
+    (r) => r.selectedScenario === "No action",
+  );
+  const noActionBusinessWaste = noActionNetworks.reduce(
+    (sum, r) => sum + (r.businessWaste ?? 0),
+    0,
+  );
 
   const topBusinessWasteData = filteredRows
     .filter(
@@ -261,37 +269,54 @@ export default function NetworkSummary() {
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col gap-4 p-5">
           {/* Overview tiles */}
-          <div className="grid grid-cols-4 gap-4 shrink-0">
-            <OverviewTile
-              icon={<Network size={18} />}
-              label="Total Networks"
-              value={totalNetworks}
-              accent="#1565C0"
-            />
-            <OverviewTile
-              icon={<Layers size={18} />}
-              label="Transitioning CBUs"
-              value={transitioningCbus}
-              accent="#00695C"
-            />
-            <DualMetricTile
-              icon={<Wallet size={18} />}
-              title="Business Waste + Savings"
-              accent="#1565C0"
-              metrics={[
-                { label: "Business Waste", value: fmtMoney(totalBusinessWaste), color: "#1565C0" },
-                { label: "Savings", value: fmtMoney(totalSavings), color: "#15803d" },
-              ]}
-            />
-            <DualMetricTile
-              icon={<AlertTriangle size={18} />}
-              title="Networks with Deviations"
-              accent="#b91c1c"
-              metrics={[
-                { label: "Require immediate action", value: String(networksWithDeviations), color: "#b91c1c" },
-                { label: "Value at Risk", value: fmtMoney(valueAtRisk), color: "#b91c1c" },
-              ]}
-            />
+          <div className="grid grid-cols-12 gap-4 shrink-0">
+            <div className="col-span-2">
+              <OverviewTile
+                icon={<Network size={18} />}
+                label="Total Networks"
+                value={totalNetworks}
+                accent="#1565C0"
+              />
+            </div>
+            <div className="col-span-2">
+              <OverviewTile
+                icon={<Layers size={18} />}
+                label="Transitioning CBUs"
+                value={transitioningCbus}
+                accent="#00695C"
+              />
+            </div>
+            <div className="col-span-3">
+              <DualMetricTile
+                icon={<Wallet size={18} />}
+                title="Business Waste + Savings"
+                accent="#1565C0"
+                metrics={[
+                  { label: "Business Waste", value: fmtMoney(totalBusinessWaste), color: "#1565C0" },
+                  { label: "Savings", value: fmtMoney(totalSavings), color: "#15803d" },
+                ]}
+              />
+            </div>
+            <div className="col-span-2">
+              <OverviewTile
+                icon={<Ban size={18} />}
+                label="No Action Business Waste"
+                value={fmtMoney(noActionBusinessWaste)}
+                accent="#b45309"
+                sub={`Across ${noActionNetworks.length} network${noActionNetworks.length === 1 ? "" : "s"}`}
+              />
+            </div>
+            <div className="col-span-3">
+              <DualMetricTile
+                icon={<AlertTriangle size={18} />}
+                title="Networks with Deviations"
+                accent="#b91c1c"
+                metrics={[
+                  { label: "Require immediate action", value: String(networksWithDeviations), color: "#b91c1c" },
+                  { label: "Savings Value at Risk", value: fmtMoney(valueAtRisk), color: "#b91c1c" },
+                ]}
+              />
+            </div>
           </div>
 
           {/* Filters */}
@@ -489,7 +514,7 @@ function OverviewTile({
 }) {
   return (
     <div
-      className="rounded-lg px-4 py-3.5 flex items-start gap-3"
+      className="rounded-lg px-4 py-3.5 flex items-start gap-3 h-full"
       style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
     >
       <div
@@ -536,7 +561,7 @@ function DualMetricTile({
 }) {
   return (
     <div
-      className="rounded-lg px-4 py-3.5 flex flex-col gap-2.5"
+      className="rounded-lg px-4 py-3.5 flex flex-col gap-2.5 h-full"
       style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
     >
       <div className="flex items-center gap-2">
@@ -559,7 +584,7 @@ function DualMetricTile({
             <div className="text-lg font-bold truncate" style={{ color: m.color }}>
               {m.value}
             </div>
-            <div className="text-[10px] mt-0.5 truncate" style={{ color: "#9ca3af" }}>
+            <div className="text-[10px] mt-0.5 truncate" style={{ color: "#9ca3af" }} title={m.label}>
               {m.label}
             </div>
           </div>
