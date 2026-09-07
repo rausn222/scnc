@@ -12,6 +12,7 @@ export interface NetworkRow {
   selectedScenario: string;
   oldCbuCount: number;
   businessWaste: number | null;
+  savings: number | null;
   totalCost: number | null;
   benefit: string;
   productionStopDate: string;
@@ -30,6 +31,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "IUT + Procurement (Break MOQ)",
     oldCbuCount: 10,
     businessWaste: 2456,
+    savings: 1800,
     totalCost: 1000,
     benefit: "-",
     productionStopDate: "28th Sept 2026",
@@ -44,6 +46,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "No action",
     oldCbuCount: 5,
     businessWaste: 1500,
+    savings: 1200,
     totalCost: 0,
     benefit: "—",
     productionStopDate: "30th Sept 2026",
@@ -58,6 +61,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "Not yet selected",
     oldCbuCount: 2,
     businessWaste: null,
+    savings: null,
     totalCost: null,
     benefit: "—",
     productionStopDate: "—",
@@ -72,6 +76,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "Procurement",
     oldCbuCount: 4,
     businessWaste: 10500,
+    savings: 6200,
     totalCost: 2500,
     benefit: "—",
     productionStopDate: "20th Oct 2026",
@@ -86,6 +91,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "IUT",
     oldCbuCount: 2,
     businessWaste: 800,
+    savings: 500,
     totalCost: 400,
     benefit: "—",
     productionStopDate: "30th Sept 2026",
@@ -100,6 +106,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "Procurement",
     oldCbuCount: 2,
     businessWaste: 6200,
+    savings: 3900,
     totalCost: 3100,
     benefit: "—",
     productionStopDate: "31st Oct 2026",
@@ -114,6 +121,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "No action",
     oldCbuCount: 4,
     businessWaste: 0,
+    savings: 0,
     totalCost: 0,
     benefit: "—",
     productionStopDate: "31st Jul 2026",
@@ -128,6 +136,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "IUT + Procurement",
     oldCbuCount: 2,
     businessWaste: 1200,
+    savings: 950,
     totalCost: 600,
     benefit: "—",
     productionStopDate: "15th Oct 2026",
@@ -142,6 +151,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "Not yet selected",
     oldCbuCount: 3,
     businessWaste: null,
+    savings: null,
     totalCost: null,
     benefit: "—",
     productionStopDate: "—",
@@ -156,6 +166,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     selectedScenario: "Procurement",
     oldCbuCount: 4,
     businessWaste: 1900,
+    savings: 1400,
     totalCost: 950,
     benefit: "—",
     productionStopDate: "31st Aug 2026",
