@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { ComponentCodeWithDesc } from "../../sciDetails/ComponentCodeWithDesc";
 import { C, IUT_TRANSFER_LANES, IUT_LANE_REQUIREMENTS, RM_BADGE, PM_BADGE } from "../../sciDetails/constants";
@@ -49,6 +49,8 @@ export function getMaterialBatchKey(row: MaterialBatchRow) {
 
 const SHELF_LIFE_THRESHOLD_HELP = "Minimum shelf life for material to be considered for IUT";
 
+const TABLE_HEADERS = ["TRANSFER ROUTE", "MATERIAL", "TRANSIT TIME", "ADDITIONAL LEAD TIME", "SHELF-LIFE THRESHOLD", "CONFIDENCE", "POSSIBLE"];
+
 /** Compact lane label sized to match the table's own text-xs baseline — PlantRouteLabel
  * itself runs larger (text-sm) for use outside tables, so it isn't reused here. */
 function LaneCell({ from, to }: { from: string; to: string }) {
@@ -89,9 +91,8 @@ export function IutFeasibilityContent({
   selectedBatches?: Record<string, boolean>;
   onBatchToggle?: (batchKey: string) => void;
 }) {
-  // Keyed by `${laneKey}::${materialCode}` — a material with batch data only
-  // ever appears in one lane's requirement list today, but this keeps a
-  // lane's expand state independent if that ever changes.
+  // Keyed by laneKey — expanding a lane reveals batch details for every
+  // material in that lane's requirement list, not just one material at a time.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   return (
@@ -100,7 +101,7 @@ export function IutFeasibilityContent({
         <table className="w-full text-xs">
           <thead>
             <tr style={{ backgroundColor: C.navy }}>
-              {["TRANSFER ROUTE", "MATERIAL", "TRANSIT TIME", "ADDITIONAL LEAD TIME", "SHELF-LIFE THRESHOLD", "CONFIDENCE", "POSSIBLE"].map((h) => (
+              {TABLE_HEADERS.map((h) => (
                 <th
                   key={h}
                   className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap"
@@ -119,11 +120,33 @@ export function IutFeasibilityContent({
               const materials = (IUT_LANE_REQUIREMENTS[laneKey] ?? []).filter(
                 (m) => m.type === lane.keepType,
               );
+              const materialsWithBatches = materials
+                .map((mat) => ({ mat, batchRows: MATERIAL_BATCH_DATA.filter((b) => b.materialCode === mat.code) }))
+                .filter(({ batchRows }) => batchRows.length > 0);
+              const hasLaneBatches = materialsWithBatches.length > 0;
+              const isExpanded = hasLaneBatches && (expanded[laneKey] ?? false);
 
               return (
-                <tr key={laneKey} style={{ borderTop: "1px solid #f1f5f9" }}>
+                <Fragment key={laneKey}>
+                <tr style={{ borderTop: "1px solid #f1f5f9" }}>
                   <td className="px-3 py-2.5">
-                    <LaneCell from={lane.from} to={lane.to} />
+                    <div className="flex items-center gap-1.5">
+                      {hasLaneBatches && (
+                        <button
+                          type="button"
+                          onClick={() => setExpanded((prev) => ({ ...prev, [laneKey]: !prev[laneKey] }))}
+                          title={`${isExpanded ? "Collapse" : "Expand"} batch details for ${lane.from} → ${lane.to}`}
+                          className="shrink-0 cursor-pointer"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown size={13} style={{ color: C.blue }} />
+                          ) : (
+                            <ChevronRight size={13} style={{ color: C.blue }} />
+                          )}
+                        </button>
+                      )}
+                      <LaneCell from={lane.from} to={lane.to} />
+                    </div>
                   </td>
 
                   {materials.length === 0 ? (
@@ -133,79 +156,17 @@ export function IutFeasibilityContent({
                   ) : (
                     <td className="px-3 py-2.5">
                       <div className="space-y-2.5">
-                        {materials.map((mat) => {
-                          const batchRows = MATERIAL_BATCH_DATA.filter((b) => b.materialCode === mat.code);
-                          const hasBatches = batchRows.length > 0;
-                          const expandKey = `${laneKey}::${mat.code}`;
-                          const isExpanded = hasBatches && (expanded[expandKey] ?? false);
-
-                          return (
-                            <div key={mat.code}>
-                              <div className="flex items-center gap-1.5">
-                                {hasBatches && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setExpanded((prev) => ({ ...prev, [expandKey]: !prev[expandKey] }))
-                                    }
-                                    title={`${isExpanded ? "Collapse" : "Expand"} batch details for ${mat.code}`}
-                                    className="shrink-0 cursor-pointer self-center"
-                                  >
-                                    {isExpanded ? (
-                                      <ChevronDown size={13} style={{ color: C.blue }} />
-                                    ) : (
-                                      <ChevronRight size={13} style={{ color: C.blue }} />
-                                    )}
-                                  </button>
-                                )}
-                                <span
-                                  className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0"
-                                  style={{ backgroundColor: mat.type === "RM" ? RM_BADGE.bg : PM_BADGE.bg, color: mat.type === "RM" ? RM_BADGE.color : PM_BADGE.color }}
-                                >
-                                  {mat.type}
-                                </span>
-                                <ComponentCodeWithDesc code={mat.code} description={mat.description} />
-                              </div>
-
-                              {isExpanded && (
-                                <div
-                                  className="mt-1.5 ml-[18px] rounded-lg bg-white overflow-hidden divide-y divide-slate-100"
-                                  style={{ border: "1px solid rgba(21,101,192,0.12)" }}
-                                >
-                                  {batchRows.map((batch) => {
-                                    const batchKey = getMaterialBatchKey(batch);
-                                    return (
-                                      <label
-                                        key={batchKey}
-                                        className="flex items-start gap-2 px-2.5 py-1.5 cursor-pointer"
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={selectedBatches[batchKey] ?? true}
-                                          onChange={() => onBatchToggle?.(batchKey)}
-                                          className="mt-0.5 h-3.5 w-3.5 accent-[#1769c2] shrink-0"
-                                        />
-                                        <div className="min-w-0">
-                                          <div className="flex items-center gap-1.5 whitespace-nowrap text-[11px]">
-                                            <span className="font-semibold" style={{ color: C.blue }}>
-                                              {batch.plant}
-                                            </span>
-                                            <span className="tabular-nums" style={{ color: C.navy }}>
-                                              Batch {batch.batchNumber}
-                                            </span>
-                                          </div>
-                                          <div className="tabular-nums whitespace-nowrap text-[11px]" style={{ color: "#94a3b8" }}>
-                                            Expires {batch.expiryDate}
-                                          </div>
-                                        </div>
-                                      </label>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                        {materials.map((mat) => (
+                          <div key={mat.code} className="flex items-center gap-1.5">
+                            <span
+                              className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0"
+                              style={{ backgroundColor: mat.type === "RM" ? RM_BADGE.bg : PM_BADGE.bg, color: mat.type === "RM" ? RM_BADGE.color : PM_BADGE.color }}
+                            >
+                              {mat.type}
+                            </span>
+                            <ComponentCodeWithDesc code={mat.code} description={mat.description} />
+                          </div>
+                        ))}
                       </div>
                     </td>
                   )}
@@ -311,6 +272,63 @@ export function IutFeasibilityContent({
                     </label>
                   </td>
                 </tr>
+
+                {isExpanded && (
+                  <tr style={{ borderTop: "1px solid #f1f5f9" }}>
+                    <td colSpan={TABLE_HEADERS.length} className="px-3 pb-3 pt-0" style={{ backgroundColor: "#f8fafc" }}>
+                      <div className="ml-[22px] flex flex-col gap-3">
+                        {materialsWithBatches.map(({ mat, batchRows }) => (
+                          <div key={mat.code}>
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <span
+                                className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0"
+                                style={{ backgroundColor: mat.type === "RM" ? RM_BADGE.bg : PM_BADGE.bg, color: mat.type === "RM" ? RM_BADGE.color : PM_BADGE.color }}
+                              >
+                                {mat.type}
+                              </span>
+                              <ComponentCodeWithDesc code={mat.code} description={mat.description} />
+                            </div>
+                            <div
+                              className="rounded-lg bg-white overflow-hidden divide-y divide-slate-100"
+                              style={{ border: "1px solid rgba(21,101,192,0.12)" }}
+                            >
+                              {batchRows.map((batch) => {
+                                const batchKey = getMaterialBatchKey(batch);
+                                return (
+                                  <label
+                                    key={batchKey}
+                                    className="flex items-start gap-2 px-2.5 py-1.5 cursor-pointer"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedBatches[batchKey] ?? true}
+                                      onChange={() => onBatchToggle?.(batchKey)}
+                                      className="mt-0.5 h-3.5 w-3.5 accent-[#1769c2] shrink-0"
+                                    />
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5 whitespace-nowrap text-[11px]">
+                                        <span className="font-semibold" style={{ color: C.blue }}>
+                                          {batch.plant}
+                                        </span>
+                                        <span className="tabular-nums" style={{ color: C.navy }}>
+                                          Batch {batch.batchNumber}
+                                        </span>
+                                      </div>
+                                      <div className="tabular-nums whitespace-nowrap text-[11px]" style={{ color: "#94a3b8" }}>
+                                        Expires {batch.expiryDate}
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
