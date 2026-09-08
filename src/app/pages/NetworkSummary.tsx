@@ -11,6 +11,7 @@ import {
   Layers,
   ListFilter,
   Network,
+  PanelRightOpen,
   RefreshCw,
   RotateCcw,
   Search,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { MultiSelectFilterDropdown } from "../components/FilterDropdown";
+import { ExplainabilityPanel } from "../components/ExplainabilityPanel";
 import { useNav } from "../App";
 import {
   NETWORK_DATA,
@@ -31,6 +33,7 @@ import {
 import { BusinessWasteSavingsChart } from "../components/networkSummary/BusinessWasteSavingsChart";
 import { NetworkDeviationBreakdown } from "../components/networkSummary/NetworkDeviationBreakdown";
 import { NetworkCbuBreakdown } from "../components/networkSummary/NetworkCbuBreakdown";
+import { buildNetworkExplainability } from "../components/networkSummary/networkExplainability";
 
 const BORDER = "#e2e8f0";
 const HEAD_BG = "#003087";
@@ -88,6 +91,7 @@ export default function NetworkSummary() {
     new Set(["networkId", "projectName"]),
   );
   const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel | null>(null);
+  const [showSummaryPanel, setShowSummaryPanel] = useState(true);
   const moreFiltersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -205,24 +209,21 @@ export default function NetworkSummary() {
   );
 
   const topBusinessWasteData = filteredRows
-    .filter(
-      (r): r is NetworkRow & { businessWaste: number; savings: number } =>
-        r.businessWaste != null && r.savings != null,
-    )
-    .sort((a, b) => b.businessWaste - a.businessWaste)
+    .slice()
+    .sort((a, b) => (b.businessWaste ?? 0) - (a.businessWaste ?? 0))
     .slice(0, 10)
     .map((r) => ({
       networkId: r.networkId,
       projectName: r.projectName,
-      businessWaste: r.businessWaste,
-      savings: r.savings,
+      businessWaste: r.businessWaste ?? 0,
+      savings: r.savings ?? 0,
     }));
 
   function handleViewDetails(row: NetworkRow) {
     navigate({ page: "tracking-details" });
   }
 
-  function handleChartNetworkClick(networkId: string) {
+  function handleFocusNetwork(networkId: string) {
     if (!networkId) return;
     setFilter("networkId", [networkId]);
     setHiddenFilters((previous) => {
@@ -231,10 +232,25 @@ export default function NetworkSummary() {
       next.delete("networkId");
       return next;
     });
+  }
+
+  function handleChartNetworkClick(networkId: string) {
+    if (!networkId) return;
+    handleFocusNetwork(networkId);
     const row = NETWORK_DATA.find((r) => r.networkId === networkId);
     const hasDeviations = (row?.deviationCount ?? 0) > 0;
     setExpandedPanel(hasDeviations ? { id: networkId, type: "deviation" } : null);
   }
+
+  const focusedNetwork =
+    filters.networkId.length === 1
+      ? (NETWORK_DATA.find((r) => r.networkId === filters.networkId[0]) ?? null)
+      : null;
+
+  const explainability = useMemo(
+    () => buildNetworkExplainability(filteredRows, focusedNetwork),
+    [filteredRows, focusedNetwork],
+  );
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -264,9 +280,22 @@ export default function NetworkSummary() {
         >
           <Download size={14} />
         </motion.button>
+        {!showSummaryPanel && (
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            title="Show summary panel"
+            onClick={() => setShowSummaryPanel(true)}
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors cursor-pointer"
+            style={{ backgroundColor: "#ffffff24", color: "#fff", border: "1px solid #e5e7eb" }}
+          >
+            <PanelRightOpen size={14} />
+          </motion.button>
+        )}
       </PageHeader>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col gap-4 p-5">
           {/* Overview tiles */}
           <div className="grid grid-cols-12 gap-4 shrink-0">
@@ -480,6 +509,8 @@ export default function NetworkSummary() {
               onViewDetails={handleViewDetails}
               expanded={expandedPanel}
               onExpandedChange={setExpandedPanel}
+              onFocusNetwork={handleFocusNetwork}
+              focusedNetworkId={focusedNetwork?.networkId ?? null}
             />
 
             {/* Pagination */}
@@ -492,6 +523,17 @@ export default function NetworkSummary() {
             />
           </div>
         </div>
+        </div>
+
+        {/* {showSummaryPanel && (
+          <div className="w-[320px] shrink-0 py-5 pr-5 pl-0">
+            <ExplainabilityPanel
+              content={explainability}
+              title="Summary"
+              onClose={() => setShowSummaryPanel(false)}
+            />
+          </div>
+        )} */}
       </div>
     </div>
   );
@@ -734,11 +776,15 @@ function NetworkDetailsTable({
   onViewDetails,
   expanded,
   onExpandedChange,
+  onFocusNetwork,
+  focusedNetworkId,
 }: {
   rows: NetworkRow[];
   onViewDetails: (row: NetworkRow) => void;
   expanded: ExpandedPanel | null;
   onExpandedChange: (next: ExpandedPanel | null) => void;
+  onFocusNetwork: (networkId: string) => void;
+  focusedNetworkId: string | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -782,14 +828,17 @@ function NetworkDetailsTable({
             const sc = statusColor(row.status);
             const isExpanded = row.networkId === expanded?.id;
             const expandedType = isExpanded ? expanded?.type : null;
+            const isFocused = row.networkId === focusedNetworkId;
             const rowBg = isExpanded ? "#EFF4FB" : "#ffffff";
             const topBorder = isExpanded ? "2px solid #1565C0" : `1px solid ${BORDER}`;
-            const sideBorder = isExpanded ? "2px solid #1565C0" : undefined;
+            const sideBorder = isExpanded ? "2px solid #1565C0" : isFocused ? "2px solid #93c5fd" : undefined;
             return (
               <Fragment key={row.networkId}>
                 <tr
-                  className={isExpanded ? undefined : "hover:bg-blue-50 transition-colors"}
+                  className={`cursor-pointer ${isExpanded ? "" : "hover:bg-blue-50 transition-colors"}`}
                   style={{ backgroundColor: rowBg }}
+                  onClick={() => onFocusNetwork(row.networkId)}
+                  title={`Show ${row.networkId} in the Explainability panel`}
                 >
                   <td
                     className="px-3 py-2.5"
