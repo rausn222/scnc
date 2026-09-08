@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import {
   AlertTriangle,
-  Ban,
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -274,13 +276,9 @@ export default function NetworkSummary() {
     (sum, r) => sum + (r.businessWaste ?? 0),
     0,
   );
-  const noActionNetworks = NETWORK_DATA.filter(
-    (r) => r.selectedScenario === "No action",
-  );
-  const noActionBusinessWaste = noActionNetworks.reduce(
-    (sum, r) => sum + (r.businessWaste ?? 0),
-    0,
-  );
+  // The baseline waste if no mitigation had been taken anywhere — current business waste
+  // plus whatever's already been recovered as savings.
+  const noActionWaste = totalBusinessWaste + totalSavings;
 
   const [chartMetric, setChartMetric] = useState<ChartMetric>("businessWaste");
 
@@ -417,24 +415,18 @@ export default function NetworkSummary() {
                 accent="#00695C"
               />
             </div>
-            <div className="col-span-2">
-              <OverviewTile
-                icon={<Ban size={18} />}
-                label="No Action Business Waste"
-                value={fmtMoney(noActionBusinessWaste)}
-                accent="#b45309"
-                sub={`Across ${noActionNetworks.length} network${noActionNetworks.length === 1 ? "" : "s"}`}
-              />
-            </div>
-            <div className="col-span-3">
-              <DualMetricTile
+            <div className="col-span-5">
+              <WasteFlowTile
                 icon={<Wallet size={18} />}
-                title="Business Waste + Savings"
+                title="Business Waste & Savings"
                 accent="#1565C0"
-                metrics={[
-                  { label: "Business Waste", value: fmtMoney(totalBusinessWaste), color: "#1565C0" },
-                  { label: "Savings", value: fmtMoney(totalSavings), color: "#15803d" },
-                ]}
+                fromLabel="No Action Waste"
+                fromValue={fmtMoney(noActionWaste)}
+                fromColor="#b45309"
+                toLabel="Business Waste"
+                toValue={fmtMoney(totalBusinessWaste)}
+                toColor="#1565C0"
+                savings={totalSavings}
               />
             </div>
             <div className="col-span-3">
@@ -774,6 +766,97 @@ function DualMetricTile({
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Waste-flow tile — "No Action Waste → Business Waste" with the savings achieved
+// captioned under the arrow, so the tile reads as a single before/after story. ──────────
+
+function WasteFlowTile({
+  icon,
+  title,
+  accent,
+  fromLabel,
+  fromValue,
+  fromColor,
+  toLabel,
+  toValue,
+  toColor,
+  savings,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  accent: string;
+  fromLabel: string;
+  fromValue: string;
+  fromColor: string;
+  toLabel: string;
+  toValue: string;
+  toColor: string;
+  /** Raw (unformatted) savings figure — its sign decides whether waste trended down (good) or up. */
+  savings: number;
+}) {
+  // Savings > 0 means waste came down (good, arrow points down); savings < 0 means it went
+  // up instead (bad, arrow points up) — the caption always mirrors what the data says.
+  const trendUp = savings < 0;
+  const TrendIcon = trendUp ? ArrowUp : ArrowDown;
+  const trendColor = savings === 0 ? "#6b7280" : trendUp ? "#b91c1c" : "#15803d";
+
+  return (
+    <div
+      className="rounded-lg px-4 py-3.5 flex flex-col gap-2.5 h-full"
+      style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          style={{ backgroundColor: `${accent}1a`, color: accent }}
+        >
+          {icon}
+        </div>
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wide truncate"
+          style={{ color: "#6b7280" }}
+        >
+          {title}
+        </span>
+      </div>
+      <div
+        className="grid items-center justify-start gap-x-3 flex-1"
+        style={{ gridTemplateColumns: "auto minmax(110px, max-content) auto" }}
+      >
+        <div className="min-w-0 text-lg font-bold truncate" style={{ color: fromColor }}>
+          {fromValue}
+        </div>
+        <div className="flex items-center w-full" style={{ marginTop: -4 }}>
+          <div className="flex-1 h-px" style={{ backgroundColor: "#cbd5e1" }} />
+          <ArrowRight size={14} className="shrink-0" style={{ color: "#94a3b8" }} />
+        </div>
+        <div className="min-w-0 text-lg font-bold truncate" style={{ color: toColor }}>
+          {toValue}
+        </div>
+
+        <div className="text-[10px] mt-0.5 truncate" style={{ color: "#9ca3af" }} title={fromLabel}>
+          {fromLabel}
+        </div>
+        <span
+          className="text-xs font-bold justify-self-center inline-flex items-center gap-0.5 whitespace-nowrap"
+          style={{ color: trendColor }}
+        >
+          <TrendIcon size={11} />
+          {fmtMoney(Math.abs(savings))}
+        </span>
+        <div className="text-[10px] mt-0.5 truncate" style={{ color: "#9ca3af" }} title={toLabel}>
+          {toLabel}
+        </div>
+
+        <div />
+        <span className="text-[9px] uppercase tracking-wide justify-self-center whitespace-nowrap" style={{ color: "#9ca3af" }}>
+          Savings
+        </span>
+        <div />
       </div>
     </div>
   );
