@@ -135,6 +135,7 @@ export default function NetworkSummary() {
     () => new Set(DEFAULT_HIDDEN_FILTERS),
   );
   const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel | null>(null);
+  const [focusedNetworkId, setFocusedNetworkId] = useState<string | null>(null);
   const [showSummaryPanel, setShowSummaryPanel] = useState(true);
   const [filtersExpanded, setFiltersExpanded] = useState(true);
   const moreFiltersRef = useRef<HTMLDivElement>(null);
@@ -231,6 +232,7 @@ export default function NetworkSummary() {
   function clearFilters() {
     setSearch("");
     setFilters(EMPTY_FILTERS);
+    setFocusedNetworkId(null);
   }
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
@@ -320,7 +322,15 @@ export default function NetworkSummary() {
     navigate({ page: "tracking-details" });
   }
 
+  // Focuses the Explainability panel and highlights the row — a read-only "spotlight" that
+  // never narrows the Network Details table itself. Only the search/filter section and chart
+  // clicks (which set the networkId filter below) are allowed to change which rows are shown.
   function handleFocusNetwork(networkId: string) {
+    if (!networkId) return;
+    setFocusedNetworkId(networkId);
+  }
+
+  function handleChartNetworkClick(networkId: string) {
     if (!networkId) return;
     setFilter("networkId", [networkId]);
     setHiddenFilters((previous) => {
@@ -329,19 +339,15 @@ export default function NetworkSummary() {
       next.delete("networkId");
       return next;
     });
-  }
-
-  function handleChartNetworkClick(networkId: string) {
-    if (!networkId) return;
-    handleFocusNetwork(networkId);
+    setFocusedNetworkId(networkId);
     const row = NETWORK_DATA.find((r) => r.networkId === networkId);
     const hasDeviations = (row?.deviationCount ?? 0) > 0;
     setExpandedPanel(hasDeviations ? { id: networkId, type: "deviation" } : null);
   }
 
   const focusedNetwork =
-    filters.networkId.length === 1
-      ? (NETWORK_DATA.find((r) => r.networkId === filters.networkId[0]) ?? null)
+    focusedNetworkId
+      ? (NETWORK_DATA.find((r) => r.networkId === focusedNetworkId) ?? null)
       : null;
 
   const explainability = useMemo(
