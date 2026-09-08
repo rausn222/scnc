@@ -397,7 +397,7 @@ function ScenarioSummaryCell({ row, count }: { row: ActionRow; count?: number })
           </span>
         </div>
 
-        <div className="space-y-1 text-sm" style={{ color: "#475569" }}>
+        <div className="space-y-1 text-xs" style={{ color: "#475569" }}>
           <div>
             <span className="font-semibold" style={{ color: "#0f172a" }}>Scenario:</span>{" "}
             <span className="font-medium" style={{ color: "#1f2937" }}>{scenarioLabel(row.scenarioType, row.seq)}</span>

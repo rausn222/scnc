@@ -358,6 +358,7 @@ export default function TrackingDetails({ tasks = [], scenario, project, onBack,
                   selected={filters[id]}
                   onChange={(value) => setFilter(id, value)}
                   maxWidth={filterWidth(id)}
+                  dense
                 />
               ))}
             </div>
