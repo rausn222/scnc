@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import {
   AlertTriangle,
@@ -137,11 +138,49 @@ export default function NetworkSummary() {
   const [showSummaryPanel, setShowSummaryPanel] = useState(true);
   const [filtersExpanded, setFiltersExpanded] = useState(true);
   const moreFiltersRef = useRef<HTMLDivElement>(null);
+  const moreFiltersButtonRef = useRef<HTMLButtonElement>(null);
+  const [moreFiltersPanelStyle, setMoreFiltersPanelStyle] = useState<React.CSSProperties>({});
+
+  const updateMoreFiltersPosition = useCallback(() => {
+    if (!moreFiltersButtonRef.current) return;
+    const rect = moreFiltersButtonRef.current.getBoundingClientRect();
+    const width = 320;
+    const margin = 8;
+    const minPanelHeight = 260;
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const openUp = spaceBelow < minPanelHeight && spaceAbove > spaceBelow;
+    setMoreFiltersPanelStyle({
+      position: "fixed",
+      left: Math.max(margin, Math.min(rect.right - width, window.innerWidth - width - margin)),
+      width,
+      maxHeight: Math.max(160, openUp ? spaceAbove : spaceBelow),
+      zIndex: 9999,
+      ...(openUp
+        ? { bottom: window.innerHeight - rect.top + margin }
+        : { top: rect.bottom + margin }),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!moreFiltersOpen) return;
+    updateMoreFiltersPosition();
+    window.addEventListener("resize", updateMoreFiltersPosition);
+    window.addEventListener("scroll", updateMoreFiltersPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMoreFiltersPosition);
+      window.removeEventListener("scroll", updateMoreFiltersPosition, true);
+    };
+  }, [moreFiltersOpen, updateMoreFiltersPosition]);
 
   useEffect(() => {
     if (!moreFiltersOpen) return;
     const closeMoreFilters = (event: MouseEvent) => {
-      if (!moreFiltersRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !moreFiltersRef.current?.contains(target) &&
+        !(target as Element).closest?.("[data-more-filters-panel]")
+      ) {
         setMoreFiltersOpen(false);
       }
     };
@@ -411,25 +450,39 @@ export default function NetworkSummary() {
             className="rounded-lg overflow-visible shrink-0"
             style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
           >
-            {/* Header: title, result count, expand/collapse toggle */}
+            {/* Header: title, search, result count, expand/collapse toggle */}
             <div
-              className="px-4 py-2 flex items-center justify-between gap-3"
+              className="px-4 py-2 flex items-center gap-3"
               style={filtersExpanded ? { borderBottom: `1px solid ${BORDER}` } : undefined}
             >
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold" style={{ color: "#374151" }}>
-                  Search &amp; Filters
+              {filtersActive && (
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
+                  style={{ backgroundColor: "#eff6ff", color: "#1565C0" }}
+                >
+                  Active
                 </span>
-                {filtersActive && (
-                  <span
-                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                    style={{ backgroundColor: "#eff6ff", color: "#1565C0" }}
-                  >
-                    Active
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
+              )}
+
+              {filtersExpanded && (
+                <div className="relative flex-1 min-w-0" style={{ maxWidth: 320 }}>
+                  <Search
+                    size={13}
+                    className="absolute left-3 top-1/2 -translate-y-1/2"
+                    style={{ color: "#9ca3af" }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Network ID or Project name…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 rounded-full text-xs focus:outline-none transition-all"
+                    style={{ backgroundColor: "#f9fafb", border: "1px solid #d1d5db", color: "#111827" }}
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 shrink-0 ml-auto">
                 <span className="text-xs shrink-0" style={{ color: "#6b7280" }}>
                   {filteredRows.length} of {NETWORK_DATA.length} networks
                 </span>
@@ -448,35 +501,6 @@ export default function NetworkSummary() {
             </div>
 
             {filtersExpanded && (
-              <>
-              {/* Row 1: Search */}
-              <div className="px-4 py-2.5 flex items-center" style={{ borderBottom: `1px solid ${BORDER}` }}>
-                <div className="flex flex-col gap-1" style={{ maxWidth: 300, flex: "1 1 260px" }}>
-                  <span
-                    className="text-[10px] font-semibold uppercase tracking-wide"
-                    style={{ color: "#374151" }}
-                  >
-                    Search
-                  </span>
-                  <div className="relative">
-                    <Search
-                      size={13}
-                      className="absolute left-3 top-1/2 -translate-y-1/2"
-                      style={{ color: "#9ca3af" }}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Network ID or Project name…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 rounded-full text-xs focus:outline-none transition-all"
-                      style={{ backgroundColor: "#f9fafb", border: "1px solid #d1d5db", color: "#111827" }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 2: Filter dropdowns */}
               <div className="px-4 py-2.5 flex items-end flex-wrap gap-2">
                 {FILTER_CONTROLS.filter(([id]) => !hiddenFilters.has(id)).map(([id, label]) => (
                   <MultiSelectFilterDropdown
@@ -505,6 +529,7 @@ export default function NetworkSummary() {
 
                 <div ref={moreFiltersRef} className="relative shrink-0">
                 <button
+                  ref={moreFiltersButtonRef}
                   type="button"
                   onClick={() => setMoreFiltersOpen((v) => !v)}
                   aria-expanded={moreFiltersOpen}
@@ -519,12 +544,13 @@ export default function NetworkSummary() {
                 >
                   <ListFilter size={13} />
                 </button>
-                {moreFiltersOpen && (
+                {moreFiltersOpen && createPortal(
                   <div
-                    className="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-xl shadow-xl"
-                    style={{ backgroundColor: "#ffffff", border: "1px solid rgba(21,101,192,0.2)" }}
+                    data-more-filters-panel
+                    className="flex flex-col overflow-hidden rounded-xl shadow-xl"
+                    style={{ ...moreFiltersPanelStyle, backgroundColor: "#ffffff", border: "1px solid rgba(21,101,192,0.2)" }}
                   >
-                    <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #e5e7eb" }}>
+                    <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: "1px solid #e5e7eb" }}>
                       <div className="flex items-center gap-2 text-xs font-bold" style={{ color: "#003087" }}>
                         <ListFilter size={13} style={{ color: "#1565C0" }} /> Manage Filters
                       </div>
@@ -537,10 +563,10 @@ export default function NetworkSummary() {
                         <RotateCcw size={10} /> Reset
                       </button>
                     </div>
-                    <div className="px-4 py-2 text-[9px] uppercase tracking-wide" style={{ color: "#6b7280", borderBottom: "1px solid #f3f4f6" }}>
+                    <div className="px-4 py-2 text-[9px] uppercase tracking-wide shrink-0" style={{ color: "#6b7280", borderBottom: "1px solid #f3f4f6" }}>
                       Toggle to show/hide filters
                     </div>
-                    <div className="max-h-56 overflow-y-auto py-1">
+                    <div className="flex-1 min-h-0 overflow-y-auto py-1">
                       {FILTER_CONTROLS.map(([id, label]) => {
                         const visible = !hiddenFilters.has(id);
                         return (
@@ -570,7 +596,7 @@ export default function NetworkSummary() {
                         );
                       })}
                     </div>
-                    <div className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: "1px solid #e5e7eb" }}>
+                    <div className="flex items-center justify-between px-4 py-2.5 shrink-0" style={{ borderTop: "1px solid #e5e7eb" }}>
                       <span className="text-[9px]" style={{ color: "#6b7280" }}>
                         {FILTER_CONTROLS.length - hiddenFilters.size} shown · {hiddenFilters.size} hidden
                       </span>
@@ -583,11 +609,11 @@ export default function NetworkSummary() {
                         Done
                       </button>
                     </div>
-                  </div>
+                  </div>,
+                  document.body,
                 )}
               </div>
               </div>
-              </>
             )}
           </div>
 
