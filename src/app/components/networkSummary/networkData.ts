@@ -63,10 +63,11 @@ export const NETWORK_DATA: NetworkRow[] = [
     savings: 1800,
     totalCost: 1000,
     benefit: "-",
-    productionStopDate: "28th Sept 2026",
+    productionStopDate: "28-09-2026",
     deviationCount: null,
     progressPct: 62,
     cbus: [
+      // One old CBU → one new CBU
       {
         id: "NET-2026-00001-1",
         oldCode: "VAFA1R",
@@ -76,23 +77,53 @@ export const NETWORK_DATA: NetworkRow[] = [
         status: "Active",
         valueAtRisk: 820,
       },
+      // Many old CBUs → one new CBU (both pack variants consolidate into a single SKU)
       {
-        id: "NET-2026-00001-2",
+        id: "NET-2026-00001-2a",
         oldCode: "VBLA2R",
         oldDescription: "Vaseline Deep Moisture 200ml",
         newCode: "VBLB2R",
         newDescription: "Vaseline Deep Moisture 200ml (Reformulated)",
         status: "Active",
-        valueAtRisk: 940,
+        valueAtRisk: 600,
       },
       {
-        id: "NET-2026-00001-3",
+        id: "NET-2026-00001-2b",
+        oldCode: "VBLC2R",
+        oldDescription: "Vaseline Deep Moisture 200ml (Twin Pack)",
+        newCode: "VBLB2R",
+        newDescription: "Vaseline Deep Moisture 200ml (Reformulated)",
+        status: "Active",
+        valueAtRisk: 340,
+      },
+      // One old CBU → many new CBUs (splits into a reformulated pack plus a new travel size)
+      {
+        id: "NET-2026-00001-3a",
         oldCode: "VBNN1R",
         oldDescription: "Vaseline Cocoa Glow 100ml",
+        newCode: "VBNF1R",
+        newDescription: "Vaseline Cocoa Glow 100ml (Reformulated)",
+        status: "At Risk",
+        valueAtRisk: 450,
+      },
+      {
+        id: "NET-2026-00001-3b",
+        oldCode: "VBNN1R",
+        oldDescription: "Vaseline Cocoa Glow 100ml",
+        newCode: "VBNG1R",
+        newDescription: "Vaseline Cocoa Glow 50ml (Travel Size)",
+        status: "At Risk",
+        valueAtRisk: 246,
+      },
+      // One old CBU → none (discontinued, no replacement)
+      {
+        id: "NET-2026-00001-4",
+        oldCode: "VBPJ1R",
+        oldDescription: "Vaseline Pure Petroleum Jelly 50g",
         newCode: null,
         newDescription: null,
         status: "At Risk",
-        valueAtRisk: 696,
+        valueAtRisk: 150,
       },
     ],
   },
@@ -108,7 +139,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     savings: 0,
     totalCost: 0,
     benefit: "—",
-    productionStopDate: "30th Sept 2026",
+    productionStopDate: "30-09-2026",
     deviationCount: null,
     progressPct: 100,
     cbus: [
@@ -180,7 +211,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     savings: 6200,
     totalCost: 2500,
     benefit: "—",
-    productionStopDate: "20th Oct 2026",
+    productionStopDate: "20-10-2026",
     deviationCount: 2,
     deviationDetails: [
       {
@@ -230,7 +261,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     savings: 500,
     totalCost: 400,
     benefit: "—",
-    productionStopDate: "30th Sept 2026",
+    productionStopDate: "30-09-2026",
     deviationCount: null,
     progressPct: 78,
     cbus: [
@@ -257,7 +288,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     savings: 3900,
     totalCost: 3100,
     benefit: "—",
-    productionStopDate: "31st Oct 2026",
+    productionStopDate: "31-10-2026",
     deviationCount: 3,
     deviationDetails: [
       {
@@ -313,7 +344,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     savings: 0,
     totalCost: 0,
     benefit: "—",
-    productionStopDate: "31st Jul 2026",
+    productionStopDate: "31-07-2026",
     deviationCount: null,
     progressPct: 100,
     cbus: [
@@ -349,7 +380,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     savings: 950,
     totalCost: 600,
     benefit: "—",
-    productionStopDate: "15th Oct 2026",
+    productionStopDate: "15-10-2026",
     deviationCount: null,
     progressPct: 55,
     cbus: [
@@ -412,7 +443,7 @@ export const NETWORK_DATA: NetworkRow[] = [
     savings: 1400,
     totalCost: 950,
     benefit: "—",
-    productionStopDate: "31st Aug 2026",
+    productionStopDate: "31-08-2026",
     deviationCount: 1,
     deviationDetails: [
       {

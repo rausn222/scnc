@@ -25,7 +25,7 @@ import {
 import { PageHeader } from "../components/PageHeader";
 import { MultiSelectFilterDropdown } from "../components/FilterDropdown";
 import { ExplainabilityPanel } from "../components/ExplainabilityPanel";
-import { useNav } from "../App";
+import { useNav, type AcceptedScenarioDetails } from "../App";
 import {
   NETWORK_DATA,
   STICKY_COL_DIVIDER,
@@ -35,6 +35,8 @@ import {
   wasteComparisonColor,
   type NetworkRow,
 } from "../components/networkSummary/networkData";
+import { buildActionTasks } from "../components/actionDetails/ActionTaskList";
+import { buildTrackingPhases, buildTrackingProject } from "../components/tracking/data";
 import {
   BusinessWasteSavingsChart,
   type ChartMetric,
@@ -48,6 +50,90 @@ const HEAD_BG = "#003087";
 const ROWS_PER_PAGE_OPTIONS = [5, 10, 20];
 
 type ExpandedPanel = { id: string; type: "cbu" | "deviation" };
+
+type NetworkSortCol =
+  | "project"
+  | "status"
+  | "scenario"
+  | "progress"
+  | "oldCbuCount"
+  | "deviationCount"
+  | "valueAtRisk"
+  | "businessWaste"
+  | "totalCost"
+  | "productionStopDate"
+  | null;
+type SortDir = "asc" | "desc";
+
+/** "DD-MM-YYYY" → a comparable number; "—" (no date yet) sorts as the earliest possible value. */
+function productionStopDateSortValue(value: string): number {
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
+  if (!match) return -1;
+  const [, dd, mm, yyyy] = match;
+  return Number(yyyy) * 10000 + Number(mm) * 100 + Number(dd);
+}
+
+function networkSortValue(row: NetworkRow, col: Exclude<NetworkSortCol, null>): string | number {
+  switch (col) {
+    case "project":
+      return row.projectName;
+    case "status":
+      return row.status;
+    case "scenario":
+      return row.selectedScenario;
+    case "progress":
+      return row.progressPct;
+    case "oldCbuCount":
+      return row.oldCbuCount;
+    case "deviationCount":
+      return row.deviationCount ?? -1;
+    case "valueAtRisk":
+      return (row.deviationCount ?? 0) > 0 ? row.businessWaste ?? 0 : -1;
+    case "businessWaste":
+      return row.businessWaste ?? -1;
+    case "totalCost":
+      return row.totalCost ?? -1;
+    case "productionStopDate":
+      return productionStopDateSortValue(row.productionStopDate);
+  }
+}
+
+// Maps the free-text scenario names used in NETWORK_DATA to the icon codes the tracking
+// helpers (buildTrackingPhases, buildActionGroups, ...) branch on.
+const SCENARIO_ICON_BY_LABEL: Record<string, string> = {
+  "No action": "no-action",
+  "IUT": "iut",
+  "Procurement": "moq",
+  "IUT + Procurement": "iut-moq",
+  "IUT + Procurement (Break MOQ)": "break",
+};
+
+/** Adapts a Network Summary row into the scenario shape Tracking Details expects, so any
+ * row's "Active"/"Complete"/"At Risk" project can link straight into execution tracking —
+ * mirrors projectToScenarioDetails (components/projectDetails/utils.ts) for Project rows. */
+function networkRowToScenario(row: NetworkRow): AcceptedScenarioDetails {
+  const primaryCbu = row.cbus[0];
+  return {
+    id: row.networkId,
+    name: row.projectName,
+    projectName: row.projectName,
+    oldCbuCode: primaryCbu?.oldCode ?? null,
+    newCbuCode: primaryCbu?.newCode ?? null,
+    oldCbuDescription: primaryCbu?.oldDescription ?? null,
+    newCbuDescription: primaryCbu?.newDescription ?? null,
+    businessWaste: fmtMoney(row.businessWaste),
+    wasteSavings: row.savings ? fmtMoney(row.savings) : null,
+    wasteColor: "teal",
+    fgDaysCover: null,
+    nextActionPrefix: "Next:",
+    nextAction: "Share scenario summary with stakeholders",
+    icon: SCENARIO_ICON_BY_LABEL[row.selectedScenario] ?? "custom",
+    feasibleProducible: row.oldCbuCount,
+    productionStopDate: row.productionStopDate,
+    dailyRunRate: 0,
+    receivingPlant: "U535",
+  };
+}
 
 const EMPTY_FILTERS = {
   networkId: [] as string[],
@@ -131,6 +217,8 @@ export default function NetworkSummary() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortCol, setSortCol] = useState<NetworkSortCol>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [hiddenFilters, setHiddenFilters] = useState<Set<FilterId>>(
     () => new Set(DEFAULT_HIDDEN_FILTERS),
@@ -236,20 +324,40 @@ export default function NetworkSummary() {
     setFocusedNetworkId(null);
   }
 
+  function handleSort(col: Exclude<NetworkSortCol, null>) {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }
+
+  const sortedRows = useMemo(() => {
+    if (!sortCol) return filteredRows;
+    const mult = sortDir === "asc" ? 1 : -1;
+    return [...filteredRows].sort((a, b) => {
+      const av = networkSortValue(a, sortCol);
+      const bv = networkSortValue(b, sortCol);
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * mult;
+      return String(av).localeCompare(String(bv), undefined, { numeric: true }) * mult;
+    });
+  }, [filteredRows, sortCol, sortDir]);
+
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
   const safePage = Math.min(page, totalPages);
   const paginatedRows = useMemo(
     () =>
-      filteredRows.slice(
+      sortedRows.slice(
         (safePage - 1) * rowsPerPage,
         safePage * rowsPerPage,
       ),
-    [filteredRows, safePage, rowsPerPage],
+    [sortedRows, safePage, rowsPerPage],
   );
 
   useEffect(() => {
     setPage(1);
-  }, [search, filters, rowsPerPage]);
+  }, [search, filters, rowsPerPage, sortCol, sortDir]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -314,8 +422,26 @@ export default function NetworkSummary() {
         ? "Top 10 networks by value at risk"
         : "Top 10 networks by business waste";
 
-  function handleViewDetails(row: NetworkRow) {
-    navigate({ page: "tracking-details" });
+  // Draft networks haven't had a scenario picked yet, so their project name routes into the
+  // simulator to run one; everything else (Active/Complete/At Risk) already has a scenario
+  // in motion, so it routes into Actions & Monitoring, pre-populated with that network's data.
+  function handleProjectClick(row: NetworkRow) {
+    if (row.status === "Draft") {
+      navigate({ page: "network-down-stocking-agent-trial" });
+      return;
+    }
+    const scenario = networkRowToScenario(row);
+    const tasks = buildActionTasks(scenario);
+    const phases = buildTrackingPhases(tasks, scenario);
+    const allItems = phases.flatMap((phase) => phase.items);
+    const project = buildTrackingProject(scenario, allItems);
+    navigate({
+      page: "tracking-details",
+      tasks,
+      scenario,
+      project,
+      from: { page: "network-summary" },
+    });
   }
 
   // Focuses the Explainability panel and highlights the row — a read-only "spotlight" that
@@ -414,7 +540,7 @@ export default function NetworkSummary() {
                 accent="#00695C"
               />
             </div>
-            <div className="col-span-4">
+            <div className="col-span-3">
               <WasteFlowTile
                 icon={<Wallet size={18} />}
                 title="Business Waste & Savings"
@@ -640,11 +766,14 @@ export default function NetworkSummary() {
             {/* Table */}
             <NetworkDetailsTable
               rows={paginatedRows}
-              onViewDetails={handleViewDetails}
+              onProjectClick={handleProjectClick}
               expanded={expandedPanel}
               onExpandedChange={setExpandedPanel}
               onFocusNetwork={handleFocusNetwork}
               focusedNetworkId={focusedNetwork?.networkId ?? null}
+              sortCol={sortCol}
+              sortDir={sortDir}
+              onSort={handleSort}
             />
 
             {/* Pagination */}
@@ -875,19 +1004,47 @@ function WasteFlowTile({
 
 // ─── Network Details table ────────────────────────────────────────────────────
 
-const COLS = [
-  { label: "Project", width: STICKY_COL_WIDTH },
-  { label: "Status", width: 100 },
-  { label: "Selected Scenario", width: 190 },
-  { label: "Progress", width: 130 },
-  { label: "Old CBU Count", width: 100 },
-  { label: "Deviation Count", width: 110 },
-  { label: "Value at Risk", width: 120 },
-  { label: "Business Waste", width: 160 },
-  { label: "Total Cost", width: 100 },
-  { label: "Production Stop Date", width: 150 },
-  { label: "View Details", width: 90 },
+const COLS: Array<{ label: string; width: number; sort: Exclude<NetworkSortCol, null> }> = [
+  { label: "Project", width: STICKY_COL_WIDTH, sort: "project" },
+  { label: "Status", width: 100, sort: "status" },
+  { label: "Selected Scenario", width: 190, sort: "scenario" },
+  { label: "Progress", width: 130, sort: "progress" },
+  { label: "Old CBU Count", width: 100, sort: "oldCbuCount" },
+  { label: "Deviation Count", width: 110, sort: "deviationCount" },
+  { label: "Value at Risk", width: 120, sort: "valueAtRisk" },
+  { label: "Business Waste", width: 160, sort: "businessWaste" },
+  { label: "Total Cost", width: 100, sort: "totalCost" },
+  { label: "Production Stop Date", width: 150, sort: "productionStopDate" },
 ];
+
+function NetworkSortHeader({
+  label,
+  col,
+  sortCol,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  col: Exclude<NetworkSortCol, null>;
+  sortCol: NetworkSortCol;
+  sortDir: SortDir;
+  onSort: (col: Exclude<NetworkSortCol, null>) => void;
+}) {
+  const active = sortCol === col;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(col)}
+      className="inline-flex items-center gap-1 select-none cursor-pointer w-full text-left"
+      style={{ font: "inherit", color: "inherit" }}
+    >
+      <span>{label}</span>
+      <span className="inline-flex flex-col leading-none shrink-0" style={{ opacity: active ? 1 : 0.4 }}>
+        {active && sortDir === "desc" ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
+      </span>
+    </button>
+  );
+}
 
 function ProgressBar({ pct }: { pct: number }) {
   return (
@@ -911,16 +1068,16 @@ function BusinessWasteCell({ row }: { row: NetworkRow }) {
   }
   const color = wasteComparisonColor(row.businessWaste, row.savings);
   return (
-    <span className="whitespace-nowrap">
-      <span className="font-bold tabular-nums" style={{ color }}>
+    <div className="whitespace-nowrap">
+      <div className="font-bold tabular-nums" style={{ color }}>
         {fmtMoney(row.businessWaste)}
-      </span>
+      </div>
       {(row.savings ?? 0) > 0 && (
-        <span className="ml-1.5 font-semibold tabular-nums" style={{ color, fontSize: 10 }}>
+        <div className="font-semibold tabular-nums" style={{ color, fontSize: 10 }}>
           ↓ {fmtMoney(row.savings)}
-        </span>
+        </div>
       )}
-    </span>
+    </div>
   );
 }
 
@@ -1010,18 +1167,24 @@ function TableScrollbar({
 
 function NetworkDetailsTable({
   rows,
-  onViewDetails,
+  onProjectClick,
   expanded,
   onExpandedChange,
   onFocusNetwork,
   focusedNetworkId,
+  sortCol,
+  sortDir,
+  onSort,
 }: {
   rows: NetworkRow[];
-  onViewDetails: (row: NetworkRow) => void;
+  onProjectClick: (row: NetworkRow) => void;
   expanded: ExpandedPanel | null;
   onExpandedChange: (next: ExpandedPanel | null) => void;
   onFocusNetwork: (networkId: string) => void;
   focusedNetworkId: string | null;
+  sortCol: NetworkSortCol;
+  sortDir: SortDir;
+  onSort: (col: Exclude<NetworkSortCol, null>) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -1055,7 +1218,7 @@ function NetworkDetailsTable({
                   borderRight: i === 0 ? STICKY_COL_DIVIDER : undefined,
                 }}
               >
-                {col.label}
+                <NetworkSortHeader label={col.label} col={col.sort} sortCol={sortCol} sortDir={sortDir} onSort={onSort} />
               </th>
             ))}
           </tr>
@@ -1087,9 +1250,22 @@ function NetworkDetailsTable({
                     >
                       {row.networkId}
                     </span>
-                    <div className="font-bold truncate" style={{ color: "#1565C0", maxWidth: 200 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onProjectClick(row);
+                      }}
+                      title={
+                        row.status === "Draft"
+                          ? `Run a scenario for ${row.projectName}`
+                          : `Open ${row.projectName} in Actions & Monitoring`
+                      }
+                      className="block w-full font-bold truncate text-left underline decoration-dotted underline-offset-2 cursor-pointer"
+                      style={{ color: "#1565C0", maxWidth: 200, fontSize: "inherit", fontFamily: "inherit" }}
+                    >
                       {row.projectName}
-                    </div>
+                    </button>
                     <div className="text-[11px] truncate" style={{ color: "#94a3b8" }}>
                       {row.bg}
                     </div>
@@ -1189,29 +1365,9 @@ function NetworkDetailsTable({
                   </td>
                   <td
                     className="px-3 py-2.5 whitespace-nowrap"
-                    style={{ borderTop: topBorder, color: "#374151" }}
+                    style={{ borderTop: topBorder, borderRight: sideBorder, color: "#374151" }}
                   >
                     {row.productionStopDate}
-                  </td>
-                  <td
-                    className="px-3 py-2.5 text-left"
-                    style={{ borderTop: topBorder, borderRight: sideBorder }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onViewDetails(row)}
-                      title="View details"
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors cursor-pointer"
-                      style={{ color: "#1565C0" }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "#EDF5F4";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                      }}
-                    >
-                      <Eye size={15} />
-                    </button>
                   </td>
                 </tr>
                 {isExpanded && (
