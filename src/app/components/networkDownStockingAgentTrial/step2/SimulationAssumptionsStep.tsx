@@ -498,7 +498,7 @@ export function SimulationAssumptionsStep({
       {openModal === "openpo" && (
         <Modal
           icon={<ShoppingCart size={17} className="text-white" />}
-          title="Open PO"
+          title="Open PO Cancellation"
           subtitle={openPoSubtitle}
           onClose={() => setOpenModal(null)}
           maxWidth="min(98vw, 1520px)"
