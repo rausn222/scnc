@@ -3,8 +3,10 @@ import { motion } from "motion/react";
 import {
   AlertTriangle,
   Ban,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Download,
   Eye,
   EyeOff,
@@ -133,6 +135,7 @@ export default function NetworkSummary() {
   );
   const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel | null>(null);
   const [showSummaryPanel, setShowSummaryPanel] = useState(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
   const moreFiltersRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -370,6 +373,15 @@ export default function NetworkSummary() {
                 accent="#00695C"
               />
             </div>
+            <div className="col-span-2">
+              <OverviewTile
+                icon={<Ban size={18} />}
+                label="No Action Business Waste"
+                value={fmtMoney(noActionBusinessWaste)}
+                accent="#b45309"
+                sub={`Across ${noActionNetworks.length} network${noActionNetworks.length === 1 ? "" : "s"}`}
+              />
+            </div>
             <div className="col-span-3">
               <DualMetricTile
                 icon={<Wallet size={18} />}
@@ -379,15 +391,6 @@ export default function NetworkSummary() {
                   { label: "Business Waste", value: fmtMoney(totalBusinessWaste), color: "#1565C0" },
                   { label: "Savings", value: fmtMoney(totalSavings), color: "#15803d" },
                 ]}
-              />
-            </div>
-            <div className="col-span-2">
-              <OverviewTile
-                icon={<Ban size={18} />}
-                label="No Action Business Waste"
-                value={fmtMoney(noActionBusinessWaste)}
-                accent="#b45309"
-                sub={`Across ${noActionNetworks.length} network${noActionNetworks.length === 1 ? "" : "s"}`}
               />
             </div>
             <div className="col-span-3">
@@ -405,144 +408,187 @@ export default function NetworkSummary() {
 
           {/* Filters */}
           <div
-            className="rounded-lg flex items-end flex-wrap gap-2 px-4 py-3 shrink-0"
+            className="rounded-lg overflow-visible shrink-0"
             style={{ backgroundColor: "#ffffff", border: `1px solid ${BORDER}` }}
           >
-            <div className="flex flex-col gap-1" style={{ maxWidth: 220, flex: "1 1 200px" }}>
-              <span
-                className="text-[10px] font-semibold uppercase tracking-wide"
-                style={{ color: "#374151" }}
-              >
-                Search
-              </span>
-              <div className="relative">
-                <Search
-                  size={13}
-                  className="absolute left-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "#9ca3af" }}
-                />
-                <input
-                  type="text"
-                  placeholder="Network ID or Project name…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 rounded-full text-xs focus:outline-none transition-all"
-                  style={{ backgroundColor: "#f9fafb", border: "1px solid #d1d5db", color: "#111827" }}
-                />
+            {/* Header: title, result count, expand/collapse toggle */}
+            <div
+              className="px-4 py-2 flex items-center justify-between gap-3"
+              style={filtersExpanded ? { borderBottom: `1px solid ${BORDER}` } : undefined}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold" style={{ color: "#374151" }}>
+                  Search &amp; Filters
+                </span>
+                {filtersActive && (
+                  <span
+                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                    style={{ backgroundColor: "#eff6ff", color: "#1565C0" }}
+                  >
+                    Active
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs shrink-0" style={{ color: "#6b7280" }}>
+                  {filteredRows.length} of {NETWORK_DATA.length} networks
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiltersExpanded((v) => !v)}
+                  aria-expanded={filtersExpanded}
+                  title={filtersExpanded ? "Collapse filters" : "Expand filters"}
+                  aria-label={filtersExpanded ? "Collapse filters" : "Expand filters"}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg transition-colors cursor-pointer"
+                  style={{ color: "#1565C0", border: "1px solid #d1d5db", backgroundColor: "#ffffff" }}
+                >
+                  {filtersExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
               </div>
             </div>
 
-            {FILTER_CONTROLS.filter(([id]) => !hiddenFilters.has(id)).map(([id, label]) => (
-              <MultiSelectFilterDropdown
-                key={id}
-                label={label}
-                options={dependentOptions(id).map((option) => ({ label: option, value: option }))}
-                selected={filters[id]}
-                onChange={(value) => setFilter(id, value)}
-                maxWidth={filterWidth(id)}
-                dense
-              />
-            ))}
-
-            <button
-              type="button"
-              onClick={clearFilters}
-              disabled={!filtersActive}
-              title="Clear filters"
-              aria-label="Clear filters"
-              className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ color: "#1565C0", border: "1px solid #d1d5db", backgroundColor: "#ffffff" }}
-            >
-              <FunnelX size={13} />
-            </button>
-
-            <div ref={moreFiltersRef} className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setMoreFiltersOpen((v) => !v)}
-                aria-expanded={moreFiltersOpen}
-                title="More filters"
-                aria-label="More filters"
-                className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors cursor-pointer"
-                style={{
-                  color: "#1565C0",
-                  border: "1px solid #d1d5db",
-                  backgroundColor: moreFiltersOpen ? "#eff6ff" : "#ffffff",
-                }}
-              >
-                <ListFilter size={13} />
-              </button>
-              {moreFiltersOpen && (
-                <div
-                  className="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-xl shadow-xl"
-                  style={{ backgroundColor: "#ffffff", border: "1px solid rgba(21,101,192,0.2)" }}
-                >
-                  <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #e5e7eb" }}>
-                    <div className="flex items-center gap-2 text-xs font-bold" style={{ color: "#003087" }}>
-                      <ListFilter size={13} style={{ color: "#1565C0" }} /> Manage Filters
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setHiddenFilters(new Set())}
-                      className="flex items-center gap-1 text-[10px] cursor-pointer"
-                      style={{ color: "#1565C0" }}
-                    >
-                      <RotateCcw size={10} /> Reset
-                    </button>
-                  </div>
-                  <div className="px-4 py-2 text-[9px] uppercase tracking-wide" style={{ color: "#6b7280", borderBottom: "1px solid #f3f4f6" }}>
-                    Toggle to show/hide filters
-                  </div>
-                  <div className="max-h-56 overflow-y-auto py-1">
-                    {FILTER_CONTROLS.map(([id, label]) => {
-                      const visible = !hiddenFilters.has(id);
-                      return (
-                        <div
-                          key={id}
-                          className="flex items-center gap-2 px-4 py-1.5"
-                          style={{ color: visible ? "#111827" : "#9ca3af", textDecoration: visible ? "none" : "line-through" }}
-                        >
-                          <span className="flex-1 text-xs">{label}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setHiddenFilters((previous) => {
-                                const next = new Set(previous);
-                                next.has(id) ? next.delete(id) : next.add(id);
-                                return next;
-                              })
-                            }
-                            className="cursor-pointer"
-                            title={visible ? "Hide filter" : "Show filter"}
-                            aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-                            style={{ color: "#1565C0" }}
-                          >
-                            {visible ? <Eye size={14} /> : <EyeOff size={14} />}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: "1px solid #e5e7eb" }}>
-                    <span className="text-[9px]" style={{ color: "#6b7280" }}>
-                      {FILTER_CONTROLS.length - hiddenFilters.size} shown · {hiddenFilters.size} hidden
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setMoreFiltersOpen(false)}
-                      className="rounded-lg px-3 py-1 text-xs cursor-pointer"
-                      style={{ backgroundColor: "#EDF5FA", color: "#374151", border: "1px solid rgba(21,101,192,0.2)" }}
-                    >
-                      Done
-                    </button>
+            {filtersExpanded && (
+              <>
+              {/* Row 1: Search */}
+              <div className="px-4 py-2.5 flex items-center" style={{ borderBottom: `1px solid ${BORDER}` }}>
+                <div className="flex flex-col gap-1" style={{ maxWidth: 300, flex: "1 1 260px" }}>
+                  <span
+                    className="text-[10px] font-semibold uppercase tracking-wide"
+                    style={{ color: "#374151" }}
+                  >
+                    Search
+                  </span>
+                  <div className="relative">
+                    <Search
+                      size={13}
+                      className="absolute left-3 top-1/2 -translate-y-1/2"
+                      style={{ color: "#9ca3af" }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Network ID or Project name…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-full text-xs focus:outline-none transition-all"
+                      style={{ backgroundColor: "#f9fafb", border: "1px solid #d1d5db", color: "#111827" }}
+                    />
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
 
-            <span className="ml-auto text-xs shrink-0 pb-1.5" style={{ color: "#6b7280" }}>
-              {filteredRows.length} of {NETWORK_DATA.length} networks
-            </span>
+              {/* Row 2: Filter dropdowns */}
+              <div className="px-4 py-2.5 flex items-end flex-wrap gap-2">
+                {FILTER_CONTROLS.filter(([id]) => !hiddenFilters.has(id)).map(([id, label]) => (
+                  <MultiSelectFilterDropdown
+                    key={id}
+                    label={label}
+                    options={dependentOptions(id).map((option) => ({ label: option, value: option }))}
+                    selected={filters[id]}
+                    onChange={(value) => setFilter(id, value)}
+                    maxWidth={filterWidth(id)}
+                    dense
+                  />
+                ))}
+
+                {filtersActive && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    title="Clear filters"
+                    aria-label="Clear filters"
+                    className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 transition-colors cursor-pointer"
+                    style={{ color: "#1565C0", border: "1px solid #d1d5db", backgroundColor: "#ffffff" }}
+                  >
+                    <FunnelX size={13} />
+                  </button>
+                )}
+
+                <div ref={moreFiltersRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMoreFiltersOpen((v) => !v)}
+                  aria-expanded={moreFiltersOpen}
+                  title="More filters"
+                  aria-label="More filters"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors cursor-pointer"
+                  style={{
+                    color: "#1565C0",
+                    border: "1px solid #d1d5db",
+                    backgroundColor: moreFiltersOpen ? "#eff6ff" : "#ffffff",
+                  }}
+                >
+                  <ListFilter size={13} />
+                </button>
+                {moreFiltersOpen && (
+                  <div
+                    className="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-xl shadow-xl"
+                    style={{ backgroundColor: "#ffffff", border: "1px solid rgba(21,101,192,0.2)" }}
+                  >
+                    <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #e5e7eb" }}>
+                      <div className="flex items-center gap-2 text-xs font-bold" style={{ color: "#003087" }}>
+                        <ListFilter size={13} style={{ color: "#1565C0" }} /> Manage Filters
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setHiddenFilters(new Set())}
+                        className="flex items-center gap-1 text-[10px] cursor-pointer"
+                        style={{ color: "#1565C0" }}
+                      >
+                        <RotateCcw size={10} /> Reset
+                      </button>
+                    </div>
+                    <div className="px-4 py-2 text-[9px] uppercase tracking-wide" style={{ color: "#6b7280", borderBottom: "1px solid #f3f4f6" }}>
+                      Toggle to show/hide filters
+                    </div>
+                    <div className="max-h-56 overflow-y-auto py-1">
+                      {FILTER_CONTROLS.map(([id, label]) => {
+                        const visible = !hiddenFilters.has(id);
+                        return (
+                          <div
+                            key={id}
+                            className="flex items-center gap-2 px-4 py-1.5"
+                            style={{ color: visible ? "#111827" : "#9ca3af", textDecoration: visible ? "none" : "line-through" }}
+                          >
+                            <span className="flex-1 text-xs">{label}</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setHiddenFilters((previous) => {
+                                  const next = new Set(previous);
+                                  next.has(id) ? next.delete(id) : next.add(id);
+                                  return next;
+                                })
+                              }
+                              className="cursor-pointer"
+                              title={visible ? "Hide filter" : "Show filter"}
+                              aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+                              style={{ color: "#1565C0" }}
+                            >
+                              {visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-2.5" style={{ borderTop: "1px solid #e5e7eb" }}>
+                      <span className="text-[9px]" style={{ color: "#6b7280" }}>
+                        {FILTER_CONTROLS.length - hiddenFilters.size} shown · {hiddenFilters.size} hidden
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMoreFiltersOpen(false)}
+                        className="rounded-lg px-3 py-1 text-xs cursor-pointer"
+                        style={{ backgroundColor: "#EDF5FA", color: "#374151", border: "1px solid rgba(21,101,192,0.2)" }}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              </div>
+              </>
+            )}
           </div>
 
           {/* Business waste and savings */}

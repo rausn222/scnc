@@ -12,6 +12,48 @@ import {
 } from "../constants";
 import { getProductionWeekEndDate } from "../utils";
 
+function parseCompareNumber(v: string | null | undefined): number {
+  if (!v || v === "Nil" || v === "—") return 0;
+  const n = parseFloat(v.replace(/[^0-9.-]/g, ""));
+  return Number.isNaN(n) ? 0 : n;
+}
+
+function formatCompareDelta(delta: number, currency: boolean): string {
+  const formatted = Math.abs(delta).toLocaleString("en-IN");
+  return currency ? `₹${formatted}` : formatted;
+}
+
+// Shared "final value + delta vs no-action baseline" layout used by the Business Waste,
+// Producible FG, and Leftover RMPM columns: the final figure always renders in black, while
+// the delta below is colored/arrowed based on whether that change is an improvement.
+function CompareStat({
+  display,
+  delta,
+  goodWhen,
+  currency,
+}: {
+  display: string;
+  delta: number;
+  goodWhen: "increase" | "decrease";
+  currency: boolean;
+}) {
+  const isGood = goodWhen === "increase" ? delta > 0 : delta < 0;
+  const color = delta === 0 ? "#94a3b8" : isGood ? C.teal : "#dc2626";
+  const arrow = delta === 0 ? null : delta > 0 ? "↑" : "↓";
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <span className="tabular-nums font-semibold text-xs" style={{ color: "#111827" }}>
+        {display}
+      </span>
+      {delta !== 0 && (
+        <span className="tabular-nums text-[10px] font-medium" style={{ color }}>
+          {arrow} {formatCompareDelta(delta, currency)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ScenarioComparisonPanel({
   scenarioIds,
   onClose,
@@ -25,6 +67,7 @@ export function ScenarioComparisonPanel({
   const scenarios = scenarioIds
     .map((id) => allScenarios.find((s) => s.id === id)!)
     .filter(Boolean);
+  const baselineScenario = allScenarios.find((s) => s.id === "no-action");
 
   const [filter, setFilter] = useState("");
 
@@ -317,41 +360,45 @@ export function ScenarioComparisonPanel({
                         <td className="px-2 py-2.5 text-center tabular-nums text-xs" style={{ color: "#374151", borderRight: "2px solid #d1d5db" }}>
                           {comp.unitPrice}
                         </td>
-                        {/* Per-scenario columns */}
+                        {/* Per-scenario columns — each shows the final value in black, with the
+                        change vs the No Action baseline colored/arrowed below it. */}
                         {scenarios.map((s) => {
                           const vals = SCENARIO_COMP_VALUES[s.id]?.[comp.componentCode];
-                          const isNil = !vals || vals.leftoverQty === "Nil";
+                          const baselineVals = SCENARIO_COMP_VALUES["no-action"]?.[comp.componentCode];
+                          const wasteDelta = s.businessWaste
+                            ? parseCompareNumber(s.businessWaste) - parseCompareNumber(baselineScenario?.businessWaste)
+                            : 0;
+                          const producibleDelta = vals && baselineVals
+                            ? parseCompareNumber(vals.producible) - parseCompareNumber(baselineVals.producible)
+                            : 0;
+                          const leftoverValDelta = vals && baselineVals
+                            ? parseCompareNumber(vals.leftoverVal) - parseCompareNumber(baselineVals.leftoverVal)
+                            : 0;
                           return (
                             <React.Fragment key={s.id}>
                               <td className="px-2 py-2.5 text-center align-top" style={{ borderLeft: "2px solid #e2e8f0" }}>
-                                <div className="flex flex-col items-center gap-0.5">
-                                  <span
-                                    className="tabular-nums font-semibold text-xs"
-                                    style={{ color: s.wasteColor === "teal" ? C.teal : "#dc2626" }}
-                                  >
-                                    {s.businessWaste ?? "—"}
-                                  </span>
-                                  {s.wasteSavings && (
-                                    <span className="tabular-nums text-[10px] font-medium" style={{ color: C.teal }}>
-                                      ↓ {s.wasteSavings}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-2 py-2.5 text-center tabular-nums font-semibold text-xs" style={{ color: "#374151" }}>
-                                {vals?.producible ?? "—"}
+                                <CompareStat
+                                  display={s.businessWaste ?? "—"}
+                                  delta={wasteDelta}
+                                  goodWhen="decrease"
+                                  currency
+                                />
                               </td>
                               <td className="px-2 py-2.5 text-center align-top">
-                                <div className="flex flex-col items-center gap-0.5">
-                                  <span className="tabular-nums font-semibold text-xs" style={{ color: isNil ? C.green : "#dc2626" }}>
-                                    {vals?.leftoverQty ?? "—"}
-                                  </span>
-                                  {!isNil && vals?.leftoverVal && (
-                                    <span className="tabular-nums text-[10px] font-medium" style={{ color: "#dc2626" }}>
-                                      {vals.leftoverVal}
-                                    </span>
-                                  )}
-                                </div>
+                                <CompareStat
+                                  display={vals?.producible ?? "—"}
+                                  delta={producibleDelta}
+                                  goodWhen="increase"
+                                  currency={false}
+                                />
+                              </td>
+                              <td className="px-2 py-2.5 text-center align-top">
+                                <CompareStat
+                                  display={vals?.leftoverQty ?? "—"}
+                                  delta={leftoverValDelta}
+                                  goodWhen="decrease"
+                                  currency
+                                />
                               </td>
                             </React.Fragment>
                           );
