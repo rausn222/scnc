@@ -276,43 +276,64 @@ export function IutFeasibilityContent({
                 {isExpanded && (
                   <tr style={{ borderTop: "1px solid #f1f5f9" }}>
                     <td colSpan={TABLE_HEADERS.length} className="px-3 pb-3 pt-0" style={{ backgroundColor: "#f8fafc" }}>
-                      <div className="ml-[22px] flex flex-col gap-3">
+                      <div className="ml-[22px] flex flex-col items-start gap-3">
                         {materialsWithBatches.map(({ mat, batchRows }) => (
-                          <div key={mat.code}>
-                            <div
-                              className="rounded-lg bg-white overflow-hidden divide-y divide-slate-100"
-                              style={{ border: "1px solid rgba(21,101,192,0.12)" }}
-                            >
-                              {batchRows.map((batch) => {
-                                const batchKey = getMaterialBatchKey(batch);
-                                return (
-                                  <label
-                                    key={batchKey}
-                                    className="flex items-start gap-2 px-2.5 py-1.5 cursor-pointer"
+                          <div
+                            key={mat.code}
+                            className="rounded-lg bg-white overflow-hidden"
+                            style={{ border: "1px solid rgba(21,101,192,0.12)" }}
+                          >
+                            <table className="text-[11px]">
+                              <thead>
+                                <tr style={{ backgroundColor: "#eff6ff" }}>
+                                  <th className="w-10 px-4 py-1.5" />
+                                  <th
+                                    className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
+                                    style={{ color: "#64748b", fontSize: 9 }}
                                   >
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedBatches[batchKey] ?? true}
-                                      onChange={() => onBatchToggle?.(batchKey)}
-                                      className="mt-0.5 h-3.5 w-3.5 accent-[#1769c2] shrink-0"
-                                    />
-                                    <div className="min-w-0">
-                                      <div className="flex items-center gap-1.5 whitespace-nowrap text-[11px]">
-                                        <span className="font-semibold" style={{ color: C.blue }}>
-                                          {batch.plant}
-                                        </span>
-                                        <span className="tabular-nums" style={{ color: C.navy }}>
-                                          Batch {batch.batchNumber}
-                                        </span>
-                                      </div>
-                                      <div className="tabular-nums whitespace-nowrap text-[11px]" style={{ color: "#94a3b8" }}>
-                                        Expires {batch.expiryDate}
-                                      </div>
-                                    </div>
-                                  </label>
-                                );
-                              })}
-                            </div>
+                                    Plant
+                                  </th>
+                                  <th
+                                    className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
+                                    style={{ color: "#64748b", fontSize: 9 }}
+                                  >
+                                    Batch Number
+                                  </th>
+                                  <th
+                                    className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
+                                    style={{ color: "#64748b", fontSize: 9 }}
+                                  >
+                                    Expiry Date
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {batchRows.map((batch) => {
+                                  const batchKey = getMaterialBatchKey(batch);
+                                  return (
+                                    <tr key={batchKey} style={{ borderTop: "1px solid #f1f5f9" }}>
+                                      <td className="px-4 py-1.5">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedBatches[batchKey] ?? true}
+                                          onChange={() => onBatchToggle?.(batchKey)}
+                                          className="h-3.5 w-3.5 accent-[#1769c2]"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-1.5 font-semibold whitespace-nowrap" style={{ color: C.blue }}>
+                                        {batch.plant}
+                                      </td>
+                                      <td className="px-4 py-1.5 tabular-nums whitespace-nowrap" style={{ color: C.navy }}>
+                                        {batch.batchNumber}
+                                      </td>
+                                      <td className="px-4 py-1.5 tabular-nums whitespace-nowrap" style={{ color: "#94a3b8" }}>
+                                        {batch.expiryDate}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
                         ))}
                       </div>

@@ -4,7 +4,6 @@ import { motion } from "motion/react";
 import {
   AlertTriangle,
   ArrowDown,
-  ArrowRight,
   ArrowUp,
   ChevronDown,
   ChevronLeft,
@@ -415,7 +414,7 @@ export default function NetworkSummary() {
                 accent="#00695C"
               />
             </div>
-            <div className="col-span-5">
+            <div className="col-span-4">
               <WasteFlowTile
                 icon={<Wallet size={18} />}
                 title="Business Waste & Savings"
@@ -824,7 +823,7 @@ function WasteFlowTile({
         </span>
       </div>
       <div
-        className="grid items-center justify-start gap-x-3 flex-1"
+        className="grid items-center justify-start gap-x-2 flex-1"
         style={{ gridTemplateColumns: "auto minmax(110px, max-content) auto" }}
       >
         <div className="min-w-0 text-lg font-bold truncate" style={{ color: fromColor }}>
@@ -832,7 +831,19 @@ function WasteFlowTile({
         </div>
         <div className="flex items-center w-full" style={{ marginTop: -4 }}>
           <div className="flex-1 h-px" style={{ backgroundColor: "#cbd5e1" }} />
-          <ArrowRight size={14} className="shrink-0" style={{ color: "#94a3b8" }} />
+          {/* Hand-drawn chevron instead of an icon component — icons like ArrowRight carry
+              built-in padding inside their viewBox, which leaves a visible gap where the
+              line meets the arrowhead. This shape has none: the path touches both edges. */}
+          <svg width="7" height="8" viewBox="0 0 7 8" className="shrink-0" style={{ display: "block" }}>
+            <path
+              d="M0.5 1 L6 4 L0.5 7"
+              fill="none"
+              stroke="#94a3b8"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
         <div className="min-w-0 text-lg font-bold truncate" style={{ color: toColor }}>
           {toValue}
