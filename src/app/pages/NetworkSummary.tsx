@@ -80,9 +80,9 @@ const FILTER_CONTROLS: Array<readonly [FilterId, string]> = [
   ["actionStatus", "Action Status"],
 ];
 
-// The action-level fields (from each network's deviation items) only apply to networks that
-// have deviations, so they're less broadly useful than the rest — tucked behind "More filters".
-const DEFAULT_HIDDEN_FILTERS = new Set<FilterId>(["actionId", "actionOwner", "actionStatus"]);
+// Action Status and Action Owner surface more often than the rest of the action-level fields,
+// so they're shown by default; BG Transition and Production Stop Date are tucked behind "More filters".
+const DEFAULT_HIDDEN_FILTERS = new Set<FilterId>(["bgTransition", "productionStopDate", "actionId"]);
 
 function filterWidth(id: FilterId) {
   if (id === "selectedScenario") return 200;
@@ -289,18 +289,17 @@ export default function NetworkSummary() {
       row: r,
       valueAtRisk: (r.deviationCount ?? 0) > 0 ? r.businessWaste ?? 0 : 0,
     }));
-    const ranked =
-      chartMetric === "valueAtRisk"
-        ? withRisk.filter((x) => x.valueAtRisk > 0)
-        : withRisk;
-    const sortKey = (x: (typeof withRisk)[number]) => {
+    const metricValue = (x: (typeof withRisk)[number]) => {
       if (chartMetric === "savings") return x.row.savings ?? 0;
       if (chartMetric === "valueAtRisk") return x.valueAtRisk;
       return x.row.businessWaste ?? 0;
     };
-    return ranked
-      .slice()
-      .sort((a, b) => sortKey(b) - sortKey(a))
+    // Only rank networks that actually have a positive value for the selected metric —
+    // drafts (no scenario picked yet) and "no action" rows would otherwise pad out the
+    // Top 10 with zero-height bars.
+    return withRisk
+      .filter((x) => metricValue(x) > 0)
+      .sort((a, b) => metricValue(b) - metricValue(a))
       .slice(0, 10)
       .map((x) => ({
         networkId: x.row.networkId,
@@ -507,7 +506,8 @@ export default function NetworkSummary() {
             </div>
 
             {filtersExpanded && (
-              <div className="px-4 py-2.5 flex items-end flex-wrap gap-2">
+              <div className="px-4 py-2.5 flex items-end gap-2">
+              <div className="flex items-end flex-wrap gap-2 flex-1 min-w-0">
                 {FILTER_CONTROLS.filter(([id]) => !hiddenFilters.has(id)).map(([id, label]) => (
                   <MultiSelectFilterDropdown
                     key={id}
@@ -519,7 +519,9 @@ export default function NetworkSummary() {
                     dense
                   />
                 ))}
+              </div>
 
+              <div className="flex items-end gap-2 shrink-0">
                 {filtersActive && (
                   <button
                     type="button"
@@ -618,6 +620,7 @@ export default function NetworkSummary() {
                   </div>,
                   document.body,
                 )}
+              </div>
               </div>
               </div>
             )}
