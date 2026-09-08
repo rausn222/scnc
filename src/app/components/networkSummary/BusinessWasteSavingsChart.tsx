@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,12 +14,23 @@ import {
 const BORDER = "#e2e8f0";
 const WASTE_COLOR = "#1565C0";
 const SAVINGS_COLOR = "#15803d";
+const RISK_COLOR = "#b91c1c";
+
+export type ChartMetric = "businessWaste" | "savings" | "valueAtRisk";
+
+export const CHART_METRIC_OPTIONS: Array<{ id: ChartMetric; label: string }> = [
+  { id: "businessWaste", label: "Business Waste" },
+  { id: "savings", label: "Savings" },
+  { id: "valueAtRisk", label: "Value at Risk" },
+];
 
 export interface BusinessWasteSavingsDatum {
   networkId: string;
   projectName: string;
   businessWaste: number;
   savings: number;
+  /** True when the network has open deviations — flags its savings as at risk. */
+  hasDeviation: boolean;
 }
 
 function formatValue(n: number): string {
@@ -38,6 +50,34 @@ function LegendDot({ color, label }: { color: string; label: string }) {
       <span className="text-[11px]" style={{ color: "#374151" }}>
         {label}
       </span>
+    </div>
+  );
+}
+
+function MetricSelector({
+  metric,
+  onChange,
+}: {
+  metric: ChartMetric;
+  onChange: (metric: ChartMetric) => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5 p-0.5 rounded-full" style={{ backgroundColor: "#f1f5f9" }}>
+      {CHART_METRIC_OPTIONS.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onChange(opt.id)}
+          className="px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer"
+          style={
+            metric === opt.id
+              ? { backgroundColor: "#1565C0", color: "#ffffff" }
+              : { color: "#374151" }
+          }
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -96,16 +136,21 @@ interface BusinessWasteSavingsChartProps {
   data: BusinessWasteSavingsDatum[];
   title?: string;
   subtitle?: string;
+  metric: ChartMetric;
+  onMetricChange: (metric: ChartMetric) => void;
   onNetworkClick?: (networkId: string) => void;
 }
 
 export function BusinessWasteSavingsChart({
   data,
   title = "Business waste and savings",
-  subtitle = "Top 10 networks by business waste",
+  subtitle,
+  metric,
+  onMetricChange,
   onNetworkClick,
 }: BusinessWasteSavingsChartProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const anyAtRisk = data.some((d) => d.hasDeviation);
 
   return (
     <div
@@ -126,11 +171,13 @@ export function BusinessWasteSavingsChart({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           {!collapsed && (
             <>
+              <MetricSelector metric={metric} onChange={onMetricChange} />
               <LegendDot color={WASTE_COLOR} label="Business Waste" />
               <LegendDot color={SAVINGS_COLOR} label="Savings" />
+              {anyAtRisk && <LegendDot color={RISK_COLOR} label="Savings at Risk" />}
             </>
           )}
           <button
@@ -199,7 +246,8 @@ export function BusinessWasteSavingsChart({
                   formatter={(value: number, name: string) => [formatValue(value), name]}
                   labelFormatter={(label: string, payload) => {
                     const d = payload?.[0]?.payload as BusinessWasteSavingsDatum | undefined;
-                    return d ? `${d.networkId} — ${d.projectName}` : label;
+                    if (!d) return label;
+                    return `${d.networkId} — ${d.projectName}${d.hasDeviation ? " ⚠ Deviation" : ""}`;
                   }}
                 />
                 <Bar
@@ -213,11 +261,14 @@ export function BusinessWasteSavingsChart({
                 <Bar
                   dataKey="savings"
                   name="Savings"
-                  fill={SAVINGS_COLOR}
                   radius={[4, 4, 0, 0]}
                   className={onNetworkClick ? "cursor-pointer" : undefined}
                   onClick={(bar) => onNetworkClick?.((bar as { payload?: BusinessWasteSavingsDatum })?.payload?.networkId ?? "")}
-                />
+                >
+                  {data.map((d) => (
+                    <Cell key={d.networkId} fill={d.hasDeviation ? RISK_COLOR : SAVINGS_COLOR} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}

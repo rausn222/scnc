@@ -8,6 +8,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FunnelX,
   Layers,
   ListFilter,
   Network,
@@ -30,7 +31,10 @@ import {
   wasteComparisonColor,
   type NetworkRow,
 } from "../components/networkSummary/networkData";
-import { BusinessWasteSavingsChart } from "../components/networkSummary/BusinessWasteSavingsChart";
+import {
+  BusinessWasteSavingsChart,
+  type ChartMetric,
+} from "../components/networkSummary/BusinessWasteSavingsChart";
 import { NetworkDeviationBreakdown } from "../components/networkSummary/NetworkDeviationBreakdown";
 import { NetworkCbuBreakdown } from "../components/networkSummary/NetworkCbuBreakdown";
 import { buildNetworkExplainability } from "../components/networkSummary/networkExplainability";
@@ -42,41 +46,78 @@ const ROWS_PER_PAGE_OPTIONS = [5, 10, 20];
 type ExpandedPanel = { id: string; type: "cbu" | "deviation" };
 
 const EMPTY_FILTERS = {
-  status: [] as string[],
-  selectedScenario: [] as string[],
-  bg: [] as string[],
   networkId: [] as string[],
   projectName: [] as string[],
+  bg: [] as string[],
+  bgTransition: [] as string[],
+  status: [] as string[],
+  selectedScenario: [] as string[],
+  oldCbu: [] as string[],
+  newCbu: [] as string[],
+  productionStopDate: [] as string[],
+  actionId: [] as string[],
+  actionOwner: [] as string[],
+  actionStatus: [] as string[],
 };
 type FilterId = keyof typeof EMPTY_FILTERS;
+const ALL_FILTER_IDS = Object.keys(EMPTY_FILTERS) as FilterId[];
 
 const FILTER_CONTROLS: Array<readonly [FilterId, string]> = [
-  ["status", "Status"],
-  ["selectedScenario", "Selected Scenario"],
-  ["bg", "Business Group"],
   ["networkId", "Network ID"],
   ["projectName", "Project"],
+  ["bg", "Business Group"],
+  ["bgTransition", "BG Transition"],
+  ["status", "Status"],
+  ["selectedScenario", "Selected Scenario"],
+  ["oldCbu", "Old CBU"],
+  ["newCbu", "New CBU"],
+  ["productionStopDate", "Production Stop Date"],
+  ["actionId", "Action ID"],
+  ["actionOwner", "Action Owner"],
+  ["actionStatus", "Action Status"],
 ];
+
+// The action-level fields (from each network's deviation items) only apply to networks that
+// have deviations, so they're less broadly useful than the rest — tucked behind "More filters".
+const DEFAULT_HIDDEN_FILTERS = new Set<FilterId>(["actionId", "actionOwner", "actionStatus"]);
 
 function filterWidth(id: FilterId) {
   if (id === "selectedScenario") return 200;
   if (id === "projectName") return 190;
-  if (id === "networkId") return 160;
-  return 140;
+  if (id === "actionOwner") return 170;
+  if (id === "productionStopDate") return 160;
+  if (id === "networkId") return 150;
+  return 130;
 }
 
-function filterValue(row: NetworkRow, id: FilterId): string {
+/** Values a row contributes for a given filter — one element for scalar fields, or one per
+ * matching nested CBU / deviation action item for the array-backed ones. */
+function filterValues(row: NetworkRow, id: FilterId): string[] {
   switch (id) {
     case "status":
-      return row.status;
+      return [row.status];
     case "selectedScenario":
-      return row.selectedScenario;
+      return [row.selectedScenario];
     case "bg":
-      return row.bg;
+      return [row.bg];
+    case "bgTransition":
+      return [row.bgTransition ? "Yes" : "No"];
     case "networkId":
-      return row.networkId;
+      return [row.networkId];
     case "projectName":
-      return row.projectName;
+      return [row.projectName];
+    case "productionStopDate":
+      return [row.productionStopDate];
+    case "oldCbu":
+      return row.cbus.map((c) => c.oldCode);
+    case "newCbu":
+      return row.cbus.flatMap((c) => (c.newCode ? [c.newCode] : []));
+    case "actionId":
+      return (row.deviationDetails ?? []).map((d) => d.actionId);
+    case "actionOwner":
+      return (row.deviationDetails ?? []).map((d) => d.owner);
+    case "actionStatus":
+      return (row.deviationDetails ?? []).map((d) => d.status);
   }
 }
 
@@ -87,8 +128,8 @@ export default function NetworkSummary() {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
-  const [hiddenFilters, setHiddenFilters] = useState<Set<string>>(
-    new Set(["networkId", "projectName"]),
+  const [hiddenFilters, setHiddenFilters] = useState<Set<FilterId>>(
+    () => new Set(DEFAULT_HIDDEN_FILTERS),
   );
   const [expandedPanel, setExpandedPanel] = useState<ExpandedPanel | null>(null);
   const [showSummaryPanel, setShowSummaryPanel] = useState(true);
@@ -111,15 +152,15 @@ export default function NetworkSummary() {
 
   function dependentOptions(id: FilterId): string[] {
     const compatibleRows = NETWORK_DATA.filter((row) =>
-      Object.entries(filters).every(
-        ([filterId, values]) =>
-          filterId === id ||
-          values.length === 0 ||
-          values.includes(filterValue(row, filterId as FilterId)),
-      ),
+      ALL_FILTER_IDS.every((filterId) => {
+        if (filterId === id) return true;
+        const values = filters[filterId];
+        if (values.length === 0) return true;
+        return filterValues(row, filterId).some((v) => values.includes(v));
+      }),
     );
     const available = new Set([
-      ...compatibleRows.map((row) => filterValue(row, id)),
+      ...compatibleRows.flatMap((row) => filterValues(row, id)),
       ...filters[id],
     ]);
     return Array.from(available).sort((a, b) => a.localeCompare(b));
@@ -134,22 +175,11 @@ export default function NetworkSummary() {
         !row.projectName.toLowerCase().includes(q)
       )
         return false;
-      if (filters.status.length && !filters.status.includes(row.status))
-        return false;
-      if (
-        filters.selectedScenario.length &&
-        !filters.selectedScenario.includes(row.selectedScenario)
-      )
-        return false;
-      if (filters.bg.length && !filters.bg.includes(row.bg)) return false;
-      if (filters.networkId.length && !filters.networkId.includes(row.networkId))
-        return false;
-      if (
-        filters.projectName.length &&
-        !filters.projectName.includes(row.projectName)
-      )
-        return false;
-      return true;
+      return ALL_FILTER_IDS.every((id) => {
+        const selected = filters[id];
+        if (selected.length === 0) return true;
+        return filterValues(row, id).some((v) => selected.includes(v));
+      });
     });
   }, [search, filters]);
 
@@ -208,16 +238,41 @@ export default function NetworkSummary() {
     0,
   );
 
-  const topBusinessWasteData = filteredRows
-    .slice()
-    .sort((a, b) => (b.businessWaste ?? 0) - (a.businessWaste ?? 0))
-    .slice(0, 10)
-    .map((r) => ({
-      networkId: r.networkId,
-      projectName: r.projectName,
-      businessWaste: r.businessWaste ?? 0,
-      savings: r.savings ?? 0,
+  const [chartMetric, setChartMetric] = useState<ChartMetric>("businessWaste");
+
+  const chartData = useMemo(() => {
+    const withRisk = filteredRows.map((r) => ({
+      row: r,
+      valueAtRisk: (r.deviationCount ?? 0) > 0 ? r.businessWaste ?? 0 : 0,
     }));
+    const ranked =
+      chartMetric === "valueAtRisk"
+        ? withRisk.filter((x) => x.valueAtRisk > 0)
+        : withRisk;
+    const sortKey = (x: (typeof withRisk)[number]) => {
+      if (chartMetric === "savings") return x.row.savings ?? 0;
+      if (chartMetric === "valueAtRisk") return x.valueAtRisk;
+      return x.row.businessWaste ?? 0;
+    };
+    return ranked
+      .slice()
+      .sort((a, b) => sortKey(b) - sortKey(a))
+      .slice(0, 10)
+      .map((x) => ({
+        networkId: x.row.networkId,
+        projectName: x.row.projectName,
+        businessWaste: x.row.businessWaste ?? 0,
+        savings: x.row.savings ?? 0,
+        hasDeviation: (x.row.deviationCount ?? 0) > 0,
+      }));
+  }, [filteredRows, chartMetric]);
+
+  const chartSubtitle =
+    chartMetric === "savings"
+      ? "Top 10 networks by savings"
+      : chartMetric === "valueAtRisk"
+        ? "Top 10 networks by value at risk"
+        : "Top 10 networks by business waste";
 
   function handleViewDetails(row: NetworkRow) {
     navigate({ page: "tracking-details" });
@@ -385,6 +440,7 @@ export default function NetworkSummary() {
                 selected={filters[id]}
                 onChange={(value) => setFilter(id, value)}
                 maxWidth={filterWidth(id)}
+                dense
               />
             ))}
 
@@ -393,32 +449,32 @@ export default function NetworkSummary() {
               onClick={clearFilters}
               disabled={!filtersActive}
               title="Clear filters"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ color: "#1565C0", border: "1px solid #d1d5db" }}
+              aria-label="Clear filters"
+              className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ color: "#1565C0", border: "1px solid #d1d5db", backgroundColor: "#ffffff" }}
             >
-              <RotateCcw size={11} />
-              Clear filters
+              <FunnelX size={13} />
             </button>
 
-            <div ref={moreFiltersRef} className="relative">
+            <div ref={moreFiltersRef} className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setMoreFiltersOpen((v) => !v)}
                 aria-expanded={moreFiltersOpen}
                 title="More filters"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer"
+                aria-label="More filters"
+                className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors cursor-pointer"
                 style={{
                   color: "#1565C0",
                   border: "1px solid #d1d5db",
                   backgroundColor: moreFiltersOpen ? "#eff6ff" : "#ffffff",
                 }}
               >
-                <ListFilter size={11} />
-                More filters
+                <ListFilter size={13} />
               </button>
               {moreFiltersOpen && (
                 <div
-                  className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-xl shadow-xl"
+                  className="absolute right-0 top-full z-30 mt-2 w-80 overflow-hidden rounded-xl shadow-xl"
                   style={{ backgroundColor: "#ffffff", border: "1px solid rgba(21,101,192,0.2)" }}
                 >
                   <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #e5e7eb" }}>
@@ -490,7 +546,13 @@ export default function NetworkSummary() {
           </div>
 
           {/* Business waste and savings */}
-          <BusinessWasteSavingsChart data={topBusinessWasteData} onNetworkClick={handleChartNetworkClick} />
+          <BusinessWasteSavingsChart
+            data={chartData}
+            subtitle={chartSubtitle}
+            metric={chartMetric}
+            onMetricChange={setChartMetric}
+            onNetworkClick={handleChartNetworkClick}
+          />
 
           {/* Network Details */}
           <div

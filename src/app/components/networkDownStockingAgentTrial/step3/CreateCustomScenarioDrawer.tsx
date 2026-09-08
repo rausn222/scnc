@@ -40,7 +40,7 @@ export function CreateCustomScenarioDrawer({
     editState.addedProcurementRows.every((row) =>
       [row.plant, row.matCode, row.supplierName, row.orderQty].every(hasValue),
     );
-    const isFormValid = true;//isIutValid || isProcurementValid;
+  const isFormValid = isIutValid || isProcurementValid;
 
   const handleSave = () => {
     if (!isFormValid) return;

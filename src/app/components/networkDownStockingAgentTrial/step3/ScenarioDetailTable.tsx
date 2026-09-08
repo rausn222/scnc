@@ -120,7 +120,6 @@ export function ScenarioDetailTable({
   const isCreateMode = scenarioId === "custom-new";
   const { scenario, option, iutMaterial, extraIutRows, procurementRows, totalFg, totalCost } = vm;
   const iutRowCount = isCreateMode ? extraIutRows.length : (vm.iutActive ? 1 : 0) + extraIutRows.length;
-  const showProcurementDelete = procurementRows.length > 1;
 
   const updateOptionOverride = (patch: ScenarioEditState["optionOverride"]) => {
     onEditStateChange({ optionOverride: { ...editState.optionOverride, ...patch }, hasChanges: true });
@@ -529,7 +528,7 @@ export function ScenarioDetailTable({
                         ₹{formatIndianNumber(isCreateMode ? row.orderQty * autoProcurementValues(row.plant, row.matType, row.matCode, row.supplierName).pricePerUnit : row.total)}
                       </span>
                     </Td>
-                    {isCustomising && showProcurementDelete && (
+                    {isCustomising && (
                       <Td align="center">
                         <RowDeleteButton
                           onClick={() => (row.custom ? removeAddedProcurementRow(row.id) : removeProcurementRow(row.id))}

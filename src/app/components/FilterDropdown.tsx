@@ -259,6 +259,7 @@ export function MultiSelectFilterDropdown({
   onChange,
   stacked = true,
   maxWidth = FILTER_MAX_WIDTH,
+  dense = false,
 }: {
   label: string;
   options: MultiSelectOption[];
@@ -266,6 +267,8 @@ export function MultiSelectFilterDropdown({
   onChange: (next: string[]) => void;
   stacked?: boolean;
   maxWidth?: number;
+  /** Shrinks label/value/option text a size below the default — for toolbars with many filters. */
+  dense?: boolean;
 }) {
   const isToolbar = stacked && maxWidth > 0;
 
@@ -431,7 +434,7 @@ export function MultiSelectFilterDropdown({
                     ? onChange(selected.length === 0 ? selectableOptions.map((option) => option.value) : [])
                     : toggleValue(opt.value)}
                   title={opt.label}
-                  className="w-full flex items-center gap-2 text-left cursor-pointer px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
+                  className={`w-full flex items-center gap-2 text-left cursor-pointer px-3 py-1.5 whitespace-nowrap transition-colors ${dense ? "text-[11px]" : "text-xs"}`}
                   style={{
                     backgroundColor: checked ? "#dbeafe" : "transparent",
                     color: checked ? "#1565C0" : "#111827",
@@ -482,7 +485,7 @@ export function MultiSelectFilterDropdown({
       style={isToolbar ? { maxWidth, width: maxWidth } : undefined}
     >
       <span
-        className="text-xs font-semibold uppercase tracking-wide truncate w-full"
+        className={`font-semibold uppercase tracking-wide truncate w-full ${dense ? "text-[9px]" : "text-xs"}`}
         style={{ color: "#374151" }}
         title={label}
       >
@@ -499,9 +502,9 @@ export function MultiSelectFilterDropdown({
           aria-expanded={open}
           aria-haspopup="listbox"
           title={displayValue}
-          className={`appearance-none pl-2.5 pr-7 py-1 rounded-full text-xs cursor-pointer focus:outline-none transition-all truncate text-left ${
-            stacked ? "w-full" : ""
-          }`}
+          className={`appearance-none pl-2.5 pr-7 rounded-full cursor-pointer focus:outline-none transition-all truncate text-left ${
+            dense ? "py-0.5 text-[11px]" : "py-1 text-xs"
+          } ${stacked ? "w-full" : ""}`}
           style={{
             backgroundColor: "#ffffff",
             borderWidth: 1,
