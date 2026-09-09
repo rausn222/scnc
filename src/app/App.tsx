@@ -22,7 +22,7 @@ const CBUDetail = lazy(() => import("./pages/CBUDetail"));
 const NetworkDownStockingAgent = lazy(() => import("./pages/NetworkDownStockingAgent"));
 const NetworkDownStockingAgentV2 = lazy(() => import("./pages/NetworkDownStockingAgentV2"));
 const NetworkDownStockingAgentV3 = lazy(() => import("./pages/NetworkDownStockingAgentV3"));
-const NetworkDownStockingAgentTrial = lazy(() => import("./pages/NetworkDownStockingAgentTrial"));
+const NetworkDownStockingSimulator = lazy(() => import("./pages/NetworkDownStockingSimulator"));
 const PlantComparisonPage = lazy(() => import("./pages/PlantComparisonPage"));
 
 // ─── Navigation ───────────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ export default function App() {
               )}
               {nav.page === "network-down-stocking-agent-trial" && (
                 <Suspense fallback={<Loader />}>
-                  <NetworkDownStockingAgentTrial srNo={nav.srNo} preserveState={nav.preserveState} />
+                  <NetworkDownStockingSimulator srNo={nav.srNo} preserveState={nav.preserveState} />
                 </Suspense>
               )}
               {nav.page === "plant-comparison" && (

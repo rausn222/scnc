@@ -17,6 +17,37 @@ export const C = {
   green: "#16a34a",
   bgBlue: "#EFF4FB",
   borderBlue: "#93c5fd",
+
+  // Neutral surfaces & text
+  pageBg: "#f5f7fa",
+  white: "#ffffff",
+  border: "#e2e8f0",
+  borderLight: "#cbd5e1",
+  borderMuted: "#94a3b8",
+  bgSlate: "#f1f5f9",
+  bgSlateLight: "#f8fafc",
+  text: "#111827",
+  textSecondary: "#374151",
+  muted: "#64748b",
+  mutedDark: "#475569",
+  mutedLight: "#6b7280",
+
+  // Danger / destructive
+  danger: "#dc2626",
+  dangerDark: "#b91c1c",
+  dangerBg: "#fee2e2",
+
+  // Warning / unsaved-state
+  warning: "#d97706",
+  warningText: "#b45309",
+  warningTextDark: "#92400e",
+  warningBg: "#fef3c7",
+  warningBgLight: "#fffbeb",
+  warningBorder: "#fde68a",
+
+  // Success
+  successBg: "#dcfce7",
+  successText: "#166534",
 };
 
 export const SCENARIOS: ScenarioRow[] = [
