@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeftRight, Box, Calendar, ListChecks, Loader2, ShoppingCart, SlidersHorizontal } from "lucide-react";
-import type { CBURow } from "../../data";
+import { ArrowLeftRight, Box, Calendar, ListChecks, Loader2, ShoppingCart, SlidersHorizontal, Warehouse } from "lucide-react";
+import { PLANT_OWNERSHIP_MAP, type CBURow } from "../../data";
 import { StepSection } from "../StepSection";
 import {
   C,
@@ -9,10 +9,12 @@ import {
   MOQ_BREAK_SUPPLIERS,
   OPEN_PO_CANCELLABLE_LINES,
   OPEN_PO_LINES,
+  RMPM_BOM_CONNECTIVITY_ROWS,
   RMPM_BOM_PENDING_LIES_WITH,
   RMPM_BOM_PENDING_TILE_LABEL,
   RMPM_CONNECTIVITY_STATUS_MESSAGE,
   RMPM_CONNECTIVITY_STATUS_PILL_LABEL,
+  SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS,
   moqSupplierKey,
   type RmpmBomPendingStatus,
   type RmpmConnectivityStatus,
@@ -30,8 +32,9 @@ import { RmpmBomPendingContent } from "./RmpmBomPendingContent";
 import { IutFeasibilityContent, MATERIAL_BATCH_DATA, getMaterialBatchKey } from "./IutFeasibilityContent";
 import { MoqBreakContent } from "./MoqBreakContent";
 import MaterialScopeContent, { MATERIAL_SCOPE_DATA } from "./MaterialScopeContent";
+import { SupplierInventoryFeedstockContent } from "./SupplierInventoryFeedstockContent";
 
-type AssumptionModalKey = "openpo" | "rmpm" | "iut" | "moq" | "materialScope" | "custom";
+type AssumptionModalKey = "openpo" | "rmpm" | "iut" | "moq" | "materialScope" | "custom" | "supplierInventory";
 
 // Simulated save latency for "Customise inputs" — mirrors the loading pattern used by
 // step3/ScenarioComparisonStep's handleGenerateScenarios, so a save reads as real work.
@@ -54,9 +57,8 @@ export function SimulationAssumptionsStep({
   onDirty?: () => void;
 }) {
   const [networkTransitionDate, setNetworkTransitionDate] = useState("");
-  const [openPoCancel, setOpenPoCancel] = useState(false);
   const [poIncludedByLine, setPoIncludedByLine] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(OPEN_PO_CANCELLABLE_LINES.map((l) => [l.id, true])),
+    () => Object.fromEntries(OPEN_PO_CANCELLABLE_LINES.map((l) => [l.id, false])),
   );
   const [rmpmDate, setRmpmDate] = useState("");
   // Manual RMPM connectivity date shown inline on the tile when no New CBU is selected —
@@ -71,9 +73,14 @@ export function SimulationAssumptionsStep({
       ),
     ),
   );
+  // Shelf-life threshold defaults to 7 days for every material with batch data —
+  // still freely editable per material from there.
+  const initialBatchThresholds = Object.fromEntries(
+    Array.from(new Set(MATERIAL_BATCH_DATA.map((row) => row.materialCode))).map((code) => [code, "7"]),
+  );
   const [batchThresholds, setBatchThresholds] = useState<
     Record<string, string>
-  >({});
+  >(initialBatchThresholds);
   const [selectedBatches, setSelectedBatches] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(MATERIAL_BATCH_DATA.map((row) => [getMaterialBatchKey(row), true])),
   );
@@ -82,11 +89,14 @@ export function SimulationAssumptionsStep({
     "U535→UTR": true,
     "UTR→U535": true,
   });
+  // Pre-IUT lead time defaults to 7 days when either endpoint plant is a 2P/3P
+  // (third-party) site, else 4 days for a purely own-to-own transfer.
   const initialLeadTimes = Object.fromEntries(
-    IUT_TRANSFER_LANES.map((lane) => [
-      `${lane.from}→${lane.to}`,
-      "3",
-    ])
+    IUT_TRANSFER_LANES.map((lane) => {
+      const involvesThirdParty =
+        PLANT_OWNERSHIP_MAP[lane.from] === "2p3p" || PLANT_OWNERSHIP_MAP[lane.to] === "2p3p";
+      return [`${lane.from}→${lane.to}`, involvesThirdParty ? "7" : "4"];
+    })
   );
 
   const [contractLeadTimes, setContractLeadTimes] =
@@ -104,12 +114,22 @@ export function SimulationAssumptionsStep({
   const [isSavingCustomInputs, setIsSavingCustomInputs] = useState(false);
   const [openModal, setOpenModal] = useState<AssumptionModalKey | null>(null);
 
+  // Supplier inventory pre-fills from OPEN_PO_LINES where a matching material exists —
+  // feedstock has no such source, so it starts from the mock value on each material.
+  const initialSupplierInventory = Object.fromEntries(
+    SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS.map((material) => {
+      const match = OPEN_PO_LINES.find((l) => l.componentCode === material.materialCode);
+      return [material.materialCode, match ? String(match.supplierInventory) : ""];
+    }),
+  );
+  const initialFeedstock = Object.fromEntries(
+    SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS.map((material) => [material.materialCode, String(material.feedstock)]),
+  );
+  const [supplierInventoryInputs, setSupplierInventoryInputs] = useState<Record<string, string>>(initialSupplierInventory);
+  const [feedstockInputs, setFeedstockInputs] = useState<Record<string, string>>(initialFeedstock);
+
   const handleNetworkTransitionDate = (v: string) => {
     setNetworkTransitionDate(v);
-    onDirty?.();
-  };
-  const handleOpenPoCancel = (v: boolean) => {
-    setOpenPoCancel(v);
     onDirty?.();
   };
   const handleSetLineIncluded = (id: string, v: boolean) => {
@@ -171,6 +191,14 @@ export function SimulationAssumptionsStep({
     setMoqBreak((prev) => ({ ...prev, [key]: next }));
     onDirty?.();
   };
+  const handleSupplierInventoryChange = (materialCode: string, value: string) => {
+    setSupplierInventoryInputs((prev) => ({ ...prev, [materialCode]: value }));
+    onDirty?.();
+  };
+  const handleFeedstockChange = (materialCode: string, value: string) => {
+    setFeedstockInputs((prev) => ({ ...prev, [materialCode]: value }));
+    onDirty?.();
+  };
   const handleCustomInputsSave = () => {
     if (isSavingCustomInputs) return;
     setIsSavingCustomInputs(true);
@@ -208,8 +236,8 @@ export function SimulationAssumptionsStep({
   // cancellable lines excludes them from this count).
   const openPoIncludedCount = useMemo(() => {
     const cancellableIds = new Set(OPEN_PO_CANCELLABLE_LINES.map((l) => l.id));
-    return OPEN_PO_LINES.filter((l) => !cancellableIds.has(l.id) || !openPoCancel || poIncludedByLine[l.id]).length;
-  }, [openPoCancel, poIncludedByLine]);
+    return OPEN_PO_LINES.filter((l) => !cancellableIds.has(l.id) || poIncludedByLine[l.id]).length;
+  }, [poIncludedByLine]);
   const openPoRmCount = useMemo(() => OPEN_PO_LINES.filter((l) => l.type === "RM").length, []);
   const openPoPmCount = useMemo(() => OPEN_PO_LINES.filter((l) => l.type === "PM").length, []);
   const openPoSubtitle = `${openPoIncludedCount} of ${OPEN_PO_LINES.length} included — ${openPoRmCount} RM · ${openPoPmCount} PM`;
@@ -239,7 +267,7 @@ export function SimulationAssumptionsStep({
   );
 
   const rmpmSubtitle = newCbuRow
-    ? `New CBU -${newCbuRow.cbuCode} - material delivery date`
+    ? `1 new CBU (${newCbuRow.cbuCode}) - material delivery date`
     : "New CBU material delivery date";
 
   // BOM exists but the PO doesn't yet (contract or PO creation pending) — these two get
@@ -341,21 +369,12 @@ export function SimulationAssumptionsStep({
             title="RMPM connectivity date"
             subtitle={RMPM_BOM_PENDING_TILE_LABEL[rmpmBomPendingStatus]}
             summary={
-              rmpmDate ? (
-                <span
-                  className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                  style={{ backgroundColor: C.successBg, color: C.successText }}
-                >
-                  {formatIsoDateShort(rmpmDate)}
-                </span>
-              ) : (
-                <span
-                  className="px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap"
-                  style={{ backgroundColor: C.warningBg, color: C.warningTextDark }}
-                >
-                  {RMPM_BOM_PENDING_LIES_WITH[rmpmBomPendingStatus]}
-                </span>
-              )
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap"
+                style={{ backgroundColor: C.warningBg, color: C.warningTextDark }}
+              >
+                {RMPM_BOM_PENDING_LIES_WITH[rmpmBomPendingStatus]}
+              </span>
             }
             onClick={() => setOpenModal("rmpm")}
           />
@@ -449,6 +468,21 @@ export function SimulationAssumptionsStep({
           }
           onClick={() => setOpenModal("custom")}
         />
+
+        <AssumptionTile
+          icon={<Warehouse size={16} style={{ color: C.blue }} />}
+          title="Supplier inventory & feedstock"
+          subtitle="Inventory and feedstock held at the supplier"
+          summary={
+            <span
+              className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+              style={{ backgroundColor: C.bgBlue, color: C.blue }}
+            >
+              {SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS.length} materials
+            </span>
+          }
+          onClick={() => setOpenModal("supplierInventory")}
+        />
       </div>
 
       {openModal === "openpo" && (
@@ -461,9 +495,7 @@ export function SimulationAssumptionsStep({
           maxHeight="88vh"
         >
           <OpenPoAssumptionsContent
-            openPoCancel={openPoCancel}
             poIncludedByLine={poIncludedByLine}
-            onToggleCancel={handleOpenPoCancel}
             onSetLineIncluded={handleSetLineIncluded}
             onBulkSetIncluded={handleBulkSetIncluded}
           />
@@ -493,10 +525,8 @@ export function SimulationAssumptionsStep({
           maxHeight="86vh"
         >
           <RmpmBomPendingContent
-            newCbuRow={newCbuRow}
+            rows={RMPM_BOM_CONNECTIVITY_ROWS}
             status={rmpmBomPendingStatus}
-            date={rmpmDate}
-            onDateChange={handleRmpmDate}
           />
         </Modal>
       )}
@@ -585,9 +615,27 @@ export function SimulationAssumptionsStep({
               submitLabel="Save"
               hideTitle
               plantLevelKeys={["productionPlan"]}
-              componentMetricKeys={["onHandStock", "openPOQty", "supplierStock", "inTransitStock", "stvStock"]}
+              componentMetricKeys={["onHandStock", "openPOQty", "supplierStock", "supplierFeedStock", "inTransitStock", "stvStock"]}
             />
           )}
+        </Modal>
+      )}
+
+      {openModal === "supplierInventory" && (
+        <Modal
+          icon={<Warehouse size={17} className="text-white" />}
+          title="Supplier inventory & feedstock"
+          subtitle="Inventory and feedstock held at the supplier"
+          onClose={() => setOpenModal(null)}
+          maxWidth="min(96vw, 1040px)"
+          maxHeight="86vh"
+        >
+          <SupplierInventoryFeedstockContent
+            supplierInventory={supplierInventoryInputs}
+            onSupplierInventoryChange={handleSupplierInventoryChange}
+            feedstock={feedstockInputs}
+            onFeedstockChange={handleFeedstockChange}
+          />
         </Modal>
       )}
     </StepSection>

@@ -48,7 +48,7 @@ function MaterialSelect({
 }: {
   type: string;
   code: string;
-  onChange: (material: { type: string; code: string }) => void;
+  onChange: (material: { matType: string; matCode: string }) => void;
 }) {
   const value = type && code ? `${type} ${code}` : "";
   return (
@@ -58,8 +58,8 @@ function MaterialSelect({
         onChange={(event) => {
           const [selectedType, ...selectedCodeParts] = event.target.value.split(" ");
           onChange(event.target.value
-            ? { type: selectedType, code: selectedCodeParts.join(" ") }
-            : { type: "", code: "" });
+            ? { matType: selectedType, matCode: selectedCodeParts.join(" ") }
+            : { matType: "", matCode: "" });
         }}
         className="text-xs rounded px-1.5 py-0.5 pr-8 cursor-pointer"
         style={{ ...editInputStyle, width: 280 }}
@@ -442,7 +442,7 @@ export function ScenarioDetailTable({
       {vm.procurementApplicable && (procurementRows.length > 0 || isCustomising) && (
         <div className="rounded-lg overflow-hidden bg-white" style={{ border: isCustomising ? `1px solid ${C.blue}` : `1px solid ${C.border}` }}>
           <SectionHeading
-            title="Procurement"
+            title="Procure"
             collapsed={procurementCollapsed}
             onToggleCollapse={() => setProcurementCollapsed((v) => !v)}
             extra={isCustomising ? <AddRowButton onClick={addProcurementRow} title="Add another procurement order row" label="Add" /> : undefined}

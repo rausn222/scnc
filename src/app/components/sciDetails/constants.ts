@@ -83,7 +83,7 @@ export const SCENARIOS: ScenarioRow[] = [
   },
   {
     id: "iut-moq",
-    name: "IUT + Procurement",
+    name: "IUT + Procure",
     businessWaste: "₹2,695",
     wasteSavings: "₹2,846",
     wasteColor: "teal",
@@ -99,7 +99,7 @@ export const SCENARIOS: ScenarioRow[] = [
   },
   {
     id: "moq",
-    name: "Procurement",
+    name: "Procure",
     businessWaste: "₹5,385",
     wasteSavings: "₹156",
     wasteColor: "orange",
@@ -115,7 +115,7 @@ export const SCENARIOS: ScenarioRow[] = [
   },
   {
     id: "iut-moq-break",
-    name: "IUT + Procurement (Break MOQ)",
+    name: "IUT + Procure (Break MOQ)",
     businessWaste: "₹2,412",
     wasteSavings: "₹3,129",
     wasteColor: "teal",
@@ -589,12 +589,12 @@ export const MOQ_BREAK_MATERIALS: MoqBreakMaterial[] = [
 
 export const MOQ_BREAK_SUPPLIERS: Record<string, MoqBreakSupplier[]> = {
   "65284824": [
-    { name: "BASF SE", confidenceScore: 72, sob: 65, leadTimeDays: 10 },
-    { name: "Indian Oil Corp.", confidenceScore: 48, sob: 35, leadTimeDays: 21 },
+    { name: "BASF SE", moqBreakOccurrences12mo: 9, moqAgainstSupplier: 2000, minMoqLast12mo: 1200 },
+    { name: "Indian Oil Corp.", moqBreakOccurrences12mo: 4, moqAgainstSupplier: 3500, minMoqLast12mo: 2600 },
   ],
   "65428959": [
-    { name: "Apex Packaging Ltd", confidenceScore: 68, sob: 80, leadTimeDays: 18 },
-    { name: "Huhtamaki", confidenceScore: 41, sob: 20, leadTimeDays: 25 },
+    { name: "Apex Packaging Ltd", moqBreakOccurrences12mo: 11, moqAgainstSupplier: 5000, minMoqLast12mo: 3200 },
+    { name: "Huhtamaki", moqBreakOccurrences12mo: 3, moqAgainstSupplier: 4200, minMoqLast12mo: 3800 },
   ],
 };
 
@@ -677,13 +677,108 @@ export type RmpmBomPendingStatus = Exclude<RmpmConnectivityStatus, "po_available
 
 export const RMPM_BOM_PENDING_TILE_LABEL: Record<RmpmBomPendingStatus, string> = {
   contract_pending: "Contract to be created",
-  po_creation_pending: "PO to be created",
+  po_creation_pending: "BOM and contract available, PO pending with factory",
 };
 
 export const RMPM_BOM_PENDING_LIES_WITH: Record<RmpmBomPendingStatus, string> = {
-  contract_pending: "Lies with Procurement",
-  po_creation_pending: "Lies with factory",
+  contract_pending: "Contract issues",
+  po_creation_pending: "PO pending with factory",
 };
+
+/** Per-row contract state shown in the RMPM BOM connectivity table. */
+export type RmpmBomContractStatus = "available" | "issue" | "not_available";
+
+export interface RmpmBomConnectivityRow {
+  id: string;
+  cbu: string;
+  plant: string;
+  bomPv: string;
+  materialType: "RM" | "PM";
+  materialCode: string;
+  description: string;
+  supplierCode: string;
+  supplierName: string;
+  contractStatus: RmpmBomContractStatus;
+  /** Only set when contractStatus is "issue". */
+  contractIssue?: string;
+  /** dd-mm-yyyy, blank until the planner sets one. */
+  connectivityDate: string;
+}
+
+// Mock BOM connectivity rows for the "contract_pending" / "po_creation_pending" RMPM
+// popup — deliberately mixes all three contract states so the table demonstrates each,
+// and repeats one material/supplier pair (65284824 / SUP-1187) across two CBU/Plant
+// combos so the "club values" grouping has something real to combine.
+export const RMPM_BOM_CONNECTIVITY_ROWS: RmpmBomConnectivityRow[] = [
+  {
+    id: "rmpm-bom-1",
+    cbu: "VAFA1R3",
+    plant: "U535",
+    bomPv: "PV-2026-014",
+    materialType: "PM",
+    materialCode: "65428959",
+    description: getComponentDescriptionByCode("65428959"),
+    supplierCode: "SUP-2201",
+    supplierName: "Apex Packaging Ltd",
+    contractStatus: "available",
+    connectivityDate: "",
+  },
+  {
+    id: "rmpm-bom-2",
+    cbu: "VAFA1R3",
+    plant: "UTR",
+    bomPv: "PV-2026-014",
+    materialType: "RM",
+    materialCode: "65284824",
+    description: getComponentDescriptionByCode("65284824"),
+    supplierCode: "SUP-1187",
+    supplierName: "BASF SE",
+    contractStatus: "issue",
+    contractIssue: "Pricing renewal pending",
+    connectivityDate: "",
+  },
+  {
+    id: "rmpm-bom-3",
+    cbu: "VAFB1R0",
+    plant: "U535",
+    bomPv: "PV-2026-021",
+    materialType: "RM",
+    materialCode: "RM-XCBU-01",
+    description: "Shared raw material feed stock used across multiple CBUs",
+    supplierCode: "SUP-3390",
+    supplierName: "Indian Oil Corp.",
+    contractStatus: "not_available",
+    connectivityDate: "",
+  },
+  {
+    id: "rmpm-bom-4",
+    cbu: "VAFB1R0",
+    plant: "UTR",
+    bomPv: "PV-2026-021",
+    materialType: "PM",
+    materialCode: "64330490",
+    description: getComponentDescriptionByCode("64330490"),
+    supplierCode: "SUP-4402",
+    supplierName: "Huhtamaki",
+    contractStatus: "issue",
+    contractIssue: "Quality audit open",
+    connectivityDate: "",
+  },
+  {
+    id: "rmpm-bom-5",
+    cbu: "VAFB1R0",
+    plant: "U842",
+    bomPv: "PV-2026-021",
+    materialType: "RM",
+    materialCode: "65284824",
+    description: getComponentDescriptionByCode("65284824"),
+    supplierCode: "SUP-1187",
+    supplierName: "BASF SE",
+    contractStatus: "issue",
+    contractIssue: "Pricing renewal pending",
+    connectivityDate: "",
+  },
+];
 
 export const OPEN_PO_LINES: OpenPoLine[] = [
   {
@@ -741,9 +836,61 @@ export const OPEN_PO_LINES: OpenPoLine[] = [
 
 export const OPEN_PO_CANCELLABLE_LINES = OPEN_PO_LINES.filter((l) => isOpenPoLineCancellable(l.status));
 
+export interface SupplierInventoryFeedstockMaterial {
+  materialType: "RM" | "PM";
+  materialCode: string;
+  description: string;
+  baseUom: string;
+  supplierCode: string;
+  supplierName: string;
+  /** Mock feedstock value the input pre-fills with — no real feedstock data source exists yet. */
+  feedstock: number;
+}
+
+// Materials reused from OPEN_PO_LINES (by componentCode) so "Supplier inventory" can
+// auto-populate from that existing PO data where a match exists.
+export const SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS: SupplierInventoryFeedstockMaterial[] = [
+  {
+    materialType: "RM",
+    materialCode: "65284824",
+    description: getComponentDescriptionByCode("65284824"),
+    baseUom: "EA",
+    supplierCode: "1022275",
+    supplierName: "BASF SE",
+    feedstock: 3400,
+  },
+  {
+    materialType: "PM",
+    materialCode: "65428959",
+    description: getComponentDescriptionByCode("65428959"),
+    baseUom: "EA",
+    supplierCode: "SUP-2201",
+    supplierName: "Apex Packaging Ltd",
+    feedstock: 6100,
+  },
+  {
+    materialType: "RM",
+    materialCode: "RM-XCBU-01",
+    description: "Shared raw material feed stock used across multiple CBUs",
+    baseUom: "Tonnes",
+    supplierCode: "SUP-3390",
+    supplierName: "Indian Oil Corp.",
+    feedstock: 950,
+  },
+  {
+    materialType: "PM",
+    materialCode: "64330490",
+    description: getComponentDescriptionByCode("64330490"),
+    baseUom: "EA",
+    supplierCode: "SUP-4402",
+    supplierName: "Huhtamaki",
+    feedstock: 1800,
+  },
+];
+
 export const IUT_TRANSFER_LANES = [
-  { from: "U535", to: "UTR", keepType: "PM", qtyLabel: "Qty available for transfer", transitTime: "2 days", confidenceScore: 65 },
-  { from: "UTR", to: "U535", keepType: "RM", qtyLabel: "Qty available for transfer", transitTime: "3 days", confidenceScore: 82 },
+  { from: "U535", to: "UTR", keepType: "PM", qtyLabel: "Qty available for transfer", transitTime: "2 days", iutOccurrences12mo: 5 },
+  { from: "UTR", to: "U535", keepType: "RM", qtyLabel: "Qty available for transfer", transitTime: "3 days", iutOccurrences12mo: 11 },
 ] as const;
 
 export const IUT_LANE_REQUIREMENTS: Record<string, IutLaneMaterialReq[]> = {

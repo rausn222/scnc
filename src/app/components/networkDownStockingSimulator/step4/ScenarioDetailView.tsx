@@ -214,7 +214,7 @@ export function ScenarioDetailView({
                   Transfer Details
                 </th>
                 <th colSpan={2} className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest" style={{ color: "#93c5fd" }}>
-                  MOQ &amp; Procurement
+                  MOQ &amp; Procure
                 </th>
               </tr>
             </thead>

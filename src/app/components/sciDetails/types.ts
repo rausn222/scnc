@@ -44,6 +44,7 @@ export type CustomOverrideRow = {
   onHandStock: string;
   openPOQty: string;
   supplierStock: string;
+  supplierFeedStock?: string;
   inTransitStock?: string;
   stvStock?: string;
   conversionFactor: string;
@@ -138,11 +139,12 @@ export type MoqBreakMaterial = {
 
 export type MoqBreakSupplier = {
   name: string;
-  confidenceScore: number;
-  /** Share of business — % of this material's volume currently placed with the supplier. */
-  sob: number;
-  /** Average lead time from this supplier, in days. */
-  leadTimeDays: number;
+  /** Number of times this supplier has broken MOQ in the last 12 months. */
+  moqBreakOccurrences12mo: number;
+  /** MOQ this supplier holds this material to, in the material's base UOM. */
+  moqAgainstSupplier: number;
+  /** Lowest MOQ actually accepted from this supplier in the last 12 months. */
+  minMoqLast12mo: number;
 };
 
 export type IutLaneMaterialReq = {
@@ -160,7 +162,9 @@ export type OpenPoAssumptionLine = {
   siteCluster: string;
   componentCode: string;
   description: string;
-  date: string; // "dd-mm-yyyy" — material delivery date
+  date: string; // "dd-mm-yyyy" — material delivery date, as per PO (SAP); read-only
+  /** "dd-mm-yyyy" — latest status, editable by the planner independent of the PO-sourced date. */
+  eta: string;
   vendorName: string;
   poNumber: string;
   qty: number;

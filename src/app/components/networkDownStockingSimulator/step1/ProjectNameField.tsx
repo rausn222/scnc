@@ -106,6 +106,12 @@ export function ProjectNameField({
     return opt.toLowerCase().includes(q);
   });
 
+  const trimmedSearch = search.trim();
+  // Lets a name that isn't in the preset/created list be used directly, rather than
+  // restricting the field to picking from allOptions only.
+  const canUseTyped =
+    trimmedSearch !== "" && !allOptions.some((opt) => opt.toLowerCase() === trimmedSearch.toLowerCase());
+
   const clearValue = () => {
     if (onClear) onClear();
     else onChange("");
@@ -123,6 +129,19 @@ export function ProjectNameField({
       onChange(opt);
     }
     closePanel();
+  };
+
+  const handleUseTyped = () => {
+    if (!canUseTyped) return;
+    onChange(trimmedSearch);
+    closePanel();
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && canUseTyped) {
+      e.preventDefault();
+      handleUseTyped();
+    }
   };
 
   const handleClear = (e: React.MouseEvent) => {
@@ -159,8 +178,9 @@ export function ProjectNameField({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            title="Search project names"
-            placeholder="Search"
+            onKeyDown={handleSearchKeyDown}
+            title="Search or type a new project name"
+            placeholder="Search or type a new name"
             className="w-full pl-7 pr-2.5 py-1.5 rounded-md text-xs focus:outline-none"
             style={{
               border: PANEL_BORDER,
@@ -174,7 +194,26 @@ export function ProjectNameField({
       </div>
 
       <ul className="max-h-[280px] overflow-y-auto py-1" role="listbox">
-        {filtered.length === 0 ? (
+        {canUseTyped && (
+          <li>
+            <button
+              type="button"
+              onClick={handleUseTyped}
+              title={`Use "${trimmedSearch}" as the project name`}
+              className="w-full flex items-center gap-2 text-left cursor-pointer px-3 py-1.5 text-xs whitespace-nowrap transition-colors font-semibold"
+              style={{ color: C.blue }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = C.bgSlateLight;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+              }}
+            >
+              Use &ldquo;{trimmedSearch}&rdquo;
+            </button>
+          </li>
+        )}
+        {filtered.length === 0 && !canUseTyped ? (
           <li className="px-3 py-4 text-center text-xs" style={{ color: C.borderMuted }}>
             No matches
           </li>

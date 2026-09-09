@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { ComponentCodeWithDesc } from "../../sciDetails/ComponentCodeWithDesc";
 import { C, MOQ_BREAK_MATERIALS, MOQ_BREAK_SUPPLIERS, moqSupplierKey } from "../../sciDetails/constants";
-import { confidenceMeta } from "../../sciDetails/utils";
+import { occurrenceConfidenceMeta } from "../../sciDetails/utils";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
 
 const DEFAULT_ROWS_PER_PAGE = 10;
 
 /**
- * Every material's supplier confidence/SOB data is shown up front — no
+ * Every material's supplier confidence/MOQ data is shown up front — no
  * expand/collapse. Each supplier gets its own "Can break MOQ" switch, since
  * MOQ-break feasibility can differ supplier to supplier within a material.
  */
@@ -35,7 +35,7 @@ export function MoqBreakContent({
         <table className="w-full text-xs">
           <thead>
             <tr style={{ backgroundColor: C.navy }}>
-              {["MATERIAL", "SUPPLIER", "CONFIDENCE", "SOB", "LEAD TIME (DAYS)", "CAN BREAK MOQ"].map((h, i, arr) => (
+              {["MATERIAL", "SUPPLIER", "CONFIDENCE", "MOQ AGAINST SUPPLIER", "MIN. MOQ (12 MO)", "CAN BREAK MOQ"].map((h, i, arr) => (
                 <th
                   key={h}
                   className={`py-4 font-bold uppercase tracking-wide whitespace-nowrap ${
@@ -81,9 +81,9 @@ export function MoqBreakContent({
                         <p
                           key={supplier.name}
                           className="font-bold tabular-nums whitespace-nowrap"
-                          style={{ color: confidenceMeta(supplier.confidenceScore).color }}
+                          style={{ color: occurrenceConfidenceMeta(supplier.moqBreakOccurrences12mo).color }}
                         >
-                          {supplier.confidenceScore}%
+                          {supplier.moqBreakOccurrences12mo} times
                         </p>
                       ))}
                     </div>
@@ -92,7 +92,7 @@ export function MoqBreakContent({
                     <div className="space-y-4">
                       {suppliers.map((supplier) => (
                         <p key={supplier.name} className="font-bold tabular-nums whitespace-nowrap" style={{ color: C.navy }}>
-                          {supplier.sob}%
+                          {supplier.moqAgainstSupplier.toLocaleString("en-IN")}
                         </p>
                       ))}
                     </div>
@@ -101,7 +101,7 @@ export function MoqBreakContent({
                     <div className="space-y-4">
                       {suppliers.map((supplier) => (
                         <p key={supplier.name} className="tabular-nums whitespace-nowrap" style={{ color: C.muted }}>
-                          {supplier.leadTimeDays}
+                          {supplier.minMoqLast12mo.toLocaleString("en-IN")}
                         </p>
                       ))}
                     </div>

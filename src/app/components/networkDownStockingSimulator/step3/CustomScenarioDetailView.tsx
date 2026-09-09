@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
-import { C } from "../../sciDetails/constants";
-import { formatIndianNumber } from "../../sciDetails/utils";
+import { useEffect, useMemo, useState } from "react";
+import { ProductionPlanModal } from "../../ProductionPlanModal";
+import { C, PLANT_BREAKDOWN_BASE } from "../../sciDetails/constants";
+import type { IUTOption, MOQPlantOption } from "../../sciDetails/types";
+import { computeTransitionRows, formatIndianNumber, getActivePlantRoles } from "../../sciDetails/utils";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
+import { TransposedComponentBreakdownTable, type TransposedBreakdownColumn } from "../../sciDetails/step4/TransposedComponentBreakdownTable";
 import {
   Td,
   Th,
@@ -38,15 +41,22 @@ export function CustomScenarioDetailView({
   isCustomising = false,
   editState,
   onEditStateChange,
+  cbuCode,
+  cbuDescription,
 }: {
   snapshot: ScenarioDetailSnapshot;
   isCustomising?: boolean;
   editState?: CustomSnapshotEditState;
   onEditStateChange?: (patch: Partial<CustomSnapshotEditState>) => void;
+  /** Used only to open the per-plant "View Production Plan" modal from the breakdown below. */
+  cbuCode: string;
+  cbuDescription: string;
 }) {
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const [iutCollapsed, setIutCollapsed] = useState(false);
   const [procurementCollapsed, setProcurementCollapsed] = useState(false);
+  const [breakdownCollapsed, setBreakdownCollapsed] = useState(false);
+  const [productionPlanPlant, setProductionPlanPlant] = useState<string | null>(null);
   const [iutPage, setIutPage] = useState(1);
   const [iutRowsPerPage, setIutRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
   const [procPage, setProcPage] = useState(1);
@@ -58,8 +68,79 @@ export function CustomScenarioDetailView({
   const displayTotalCost = editing
     ? iutRows.reduce((sum, r) => sum + r.costPerTrip, 0) + procurementRows.reduce((sum, r) => sum + r.orderQty * r.pricePerUnit, 0)
     : snapshot.totalCost;
-const isUserCreatedScenario =
-  snapshot.sourceScenarioName === "Custom Scenario";
+
+  // Component Breakdown by Plant — a saved custom scenario has no live scenarioId/IUTOption/
+  // MOQPlantOption backing it (only the frozen snapshot fields), so build minimal adapter
+  // objects from the snapshot's own primary IUT row and first Procurement row instead. This
+  // mirrors CustomScenarioDetailPage's breakdown construction, but derives its inputs from the
+  // snapshot rather than a live catalog selection. Always reflects the saved snapshot, not any
+  // in-progress Customise edits — consistent with Business Waste/FG Cover staying frozen too.
+  const breakdownTransfer: IUTOption | null = snapshot.iut
+    ? {
+        id: "custom-breakdown-iut",
+        label: "",
+        isBest: false,
+        routeFrom: snapshot.iut.routeFrom,
+        routeTo: snapshot.iut.routeTo,
+        material: `${snapshot.iut.matType}-${snapshot.iut.matCode}`,
+        transferQty: snapshot.iut.transferQty,
+        businessWasteBefore: 0,
+        businessWasteAfter: 0,
+        reductionVsNoAction: 0,
+        laneAvailable: snapshot.iut.laneAvailable,
+        costPerTrip: snapshot.iut.costPerTrip,
+        transferLeadTime: snapshot.iut.transferLeadTime,
+        initiationDate: snapshot.iut.initiationDate,
+        prodStopSource: snapshot.iut.initiationDate,
+        prodStopDest: snapshot.iut.initiationDate,
+      }
+    : null;
+  const breakdownProcurementRow = snapshot.procurement?.[0] ?? null;
+  const breakdownMoq: MOQPlantOption | null = breakdownProcurementRow
+    ? {
+        id: breakdownProcurementRow.id,
+        plant: breakdownProcurementRow.plant,
+        isBest: false,
+        material: `${breakdownProcurementRow.matType}-${breakdownProcurementRow.matCode}`,
+        orderQty: breakdownProcurementRow.orderQty,
+        suppliers: [
+          {
+            id: breakdownProcurementRow.supplierId || breakdownProcurementRow.id,
+            name: breakdownProcurementRow.supplierName,
+            moq: breakdownProcurementRow.moq,
+            pricePerUnit: breakdownProcurementRow.pricePerUnit,
+            bizWaste: 0,
+            productionDate: "",
+          },
+        ],
+      }
+    : null;
+  // "iut-moq" just tells getActivePlantRoles/computeTransitionRows to consider both an IUT
+  // route and an ordering plant — whichever of breakdownTransfer/breakdownMoq is actually
+  // null contributes no role, so this is safe even when the scenario only has one of the two.
+  const breakdownActivePlantRoles = useMemo(
+    () => getActivePlantRoles("iut-moq", breakdownTransfer, breakdownMoq),
+    [breakdownTransfer, breakdownMoq],
+  );
+  const transposedColumns = useMemo(() => {
+    const cols: TransposedBreakdownColumn[] = [];
+    for (const { code, roles } of breakdownActivePlantRoles) {
+      const plantMeta = PLANT_BREAKDOWN_BASE[code];
+      if (!plantMeta) continue;
+      const rowsByState = computeTransitionRows(code, roles, "iut-moq", breakdownTransfer, breakdownMoq, {});
+      // Same "has real data" filter used by the other Component Breakdown by Plant views —
+      // every baseline plant is a candidate column, whether or not it has an active role here.
+      const beforeRows = rowsByState.before.filter(
+        (r) => r.onHandStock !== "—" || r.openPoQty !== "—" || r.fgEquivalentStock !== "—",
+      );
+      for (const before of beforeRows) {
+        const after = rowsByState.after.find((r) => r.component === before.component) ?? null;
+        cols.push({ key: `${code}-${before.component}`, plantCode: code, roles, before, after, plantMeta });
+      }
+    }
+    return cols;
+  }, [breakdownActivePlantRoles, breakdownTransfer, breakdownMoq]);
+
   const updateIutRow = (id: string, patch: Partial<AddedIutRow>) =>
     onEditStateChange?.({
       iutRows: editState!.iutRows.map((r) => (r.id === id ? { ...r, ...patch } : r)),
@@ -178,7 +259,7 @@ const isUserCreatedScenario =
       </p>
 
       {/* ── Summary ── */}
-      {!isUserCreatedScenario && (<div className="rounded-lg overflow-hidden bg-white" style={{ border: `1px solid ${C.border}` }}>
+      <div className="rounded-lg overflow-hidden bg-white" style={{ border: `1px solid ${C.border}` }}>
         <SectionHeading
           title="Summary"
           collapsed={summaryCollapsed}
@@ -201,7 +282,7 @@ const isUserCreatedScenario =
             <StatTile label="Total Cost" value={`₹${formatIndianNumber(displayTotalCost)}`} />
           </div>
         )}
-      </div>)}
+      </div>
 
       {/* ── IUT ── */}
       {editing ? (
@@ -337,7 +418,7 @@ const isUserCreatedScenario =
         (procurementRows.length > 0 || isCustomising) && (
           <div className="rounded-lg overflow-hidden bg-white" style={{ border: `1px solid ${C.blue}` }}>
             <SectionHeading
-              title="Procurement"
+              title="Procure"
               collapsed={procurementCollapsed}
               onToggleCollapse={() => setProcurementCollapsed((v) => !v)}
               extra={<AddRowButton onClick={addProcurementRow} title="Add another procurement order row" label="Add" />}
@@ -418,7 +499,7 @@ const isUserCreatedScenario =
         snapshot.procurement && snapshot.procurement.length > 0 && (
           <div className="rounded-lg overflow-hidden bg-white" style={{ border: `1px solid ${C.border}` }}>
             <SectionHeading
-              title="Procurement"
+              title="Procure"
               collapsed={procurementCollapsed}
               onToggleCollapse={() => setProcurementCollapsed((v) => !v)}
             />
@@ -482,6 +563,33 @@ const isUserCreatedScenario =
             )}
           </div>
         )
+      )}
+
+      {/* ── Component Breakdown by Plant ── */}
+      <div className="rounded-lg overflow-hidden bg-white" style={{ border: `1px solid ${C.border}` }}>
+        <SectionHeading
+          title="Component Breakdown by Plant"
+          collapsed={breakdownCollapsed}
+          onToggleCollapse={() => setBreakdownCollapsed((v) => !v)}
+        />
+        {!breakdownCollapsed && (
+          transposedColumns.length === 0 ? (
+            <div className="px-3 py-6 text-center text-xs italic" style={{ color: C.borderMuted }}>
+              No plant breakdown available for this scenario's materials.
+            </div>
+          ) : (
+            <TransposedComponentBreakdownTable columns={transposedColumns} onOpenProductionPlan={setProductionPlanPlant} />
+          )
+        )}
+      </div>
+      {productionPlanPlant && (
+        <ProductionPlanModal
+          plantCode={productionPlanPlant}
+          cbuCode={cbuCode}
+          cbuDescription={cbuDescription}
+          totalProduction={PLANT_BREAKDOWN_BASE[productionPlanPlant]?.totalProductionPlanQty ?? 0}
+          onClose={() => setProductionPlanPlant(null)}
+        />
       )}
     </div>
   );

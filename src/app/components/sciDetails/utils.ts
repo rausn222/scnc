@@ -216,6 +216,15 @@ export function confidenceMeta(score: number) {
   return { color: "#dc2626", label: "Low" };
 }
 
+// Same color-threshold styling as confidenceMeta, recalibrated for a raw "number of
+// times in the last 12 months" count rather than a percentage — more occurrences
+// reads as a stronger track record, so higher counts get the "High" color.
+export function occurrenceConfidenceMeta(count: number) {
+  if (count >= 8) return { color: C.green, label: "High" };
+  if (count >= 4) return { color: "#d97706", label: "Medium" };
+  return { color: "#dc2626", label: "Low" };
+}
+
 export function getPlantDisplayName(plantCode: string): string {
   if (plantCode === "All plants") return "All plants";
   return (
@@ -310,6 +319,9 @@ function derivedPoLineMeta(seedKey: string, deliveryDate: string) {
     poNumber: `600${10000000 + (seed % 90000000)}`,
     averageLeadTimeDays,
     poCreationDate: offsetDdMmYyyy(deliveryDate, -averageLeadTimeDays),
+    // Latest-status ETA can drift a few days either side of the PO/SAP-sourced date —
+    // it's what the planner edits, while the delivery date itself stays read-only.
+    eta: offsetDdMmYyyy(deliveryDate, (seed % 5) - 2),
   };
 }
 
@@ -329,6 +341,7 @@ export function buildOpenPoLinesForCbu(row: CBURow): OpenPoAssumptionLine[] {
         componentCode: po.componentCode,
         description: getComponentDescriptionByCode(po.componentCode),
         date: po.txDate, // already "dd-mm-yyyy"
+        eta: meta.eta,
         vendorName: po.supplier,
         qty: po.openQty,
         uom: po.uom,
@@ -358,6 +371,7 @@ export function buildOpenPoLinesForCbu(row: CBURow): OpenPoAssumptionLine[] {
         componentCode: r.componentCode,
         description: getComponentDescriptionByCode(r.componentCode),
         date: defaultDate,
+        eta: meta.eta,
         vendorName: meta.vendorName,
         qty: r.openPOStock,
         uom: "EA",
@@ -382,6 +396,7 @@ export function buildOpenPoLinesForCbu(row: CBURow): OpenPoAssumptionLine[] {
         componentCode: c.componentCode,
         description: getComponentDescriptionByCode(c.componentCode),
         date: defaultDate,
+        eta: meta.eta,
         vendorName: meta.vendorName,
         qty: c.openPOStock,
         uom: "EA",

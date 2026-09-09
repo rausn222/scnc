@@ -1404,6 +1404,8 @@ export function ScenarioComparisonStep({
                     isCustomising={isCustomising}
                     editState={customSnapshotEditState}
                     onEditStateChange={(patch) => setCustomSnapshotEditState((s) => ({ ...s, ...patch }))}
+                    cbuCode={row.cbuCode}
+                    cbuDescription={row.cbuDescription}
                   />
                 </div>
               ) : isCustomDetailScenario ? (

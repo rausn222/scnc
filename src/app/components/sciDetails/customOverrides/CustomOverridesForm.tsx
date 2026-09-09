@@ -14,7 +14,14 @@ import {
   Zap,
 } from "lucide-react";
 import type { CustomOverrideRow, PlantGroup, CompBreakdownRow } from "../types";
-import { C } from "../constants";
+import { C, OPEN_PO_LINES } from "../constants";
+
+// Best-effort Base UOM lookup for a component code shown in the RMPM column header —
+// falls back to "EA" (the dataset's overwhelmingly common UOM) when no match exists,
+// since CustomOverrideRow itself doesn't carry a UOM field.
+function getComponentUom(componentCode: string): string {
+  return OPEN_PO_LINES.find((l) => l.componentCode === componentCode)?.uom ?? "EA";
+}
 import {
   getBaselineTypeConversionFactor,
   CUSTOM_OVERRIDE_TYPE_OPTIONS,
@@ -32,6 +39,7 @@ export type ComponentMetricKey =
   | "onHandStock"
   | "openPOQty"
   | "supplierStock"
+  | "supplierFeedStock"
   | "inTransitStock"
   | "stvStock"
   | "conversionFactor";
@@ -43,6 +51,7 @@ const COMPONENT_METRIC_DEFS: Record<
   onHandStock: { label: "On-hand Stock", required: true, title: "On-hand stock quantity for this plant & component" },
   openPOQty: { label: "Open PO Qty", title: "Open PO quantity for this plant & component" },
   supplierStock: { label: "Supplier Stock", title: "Supplier stock for this plant & component" },
+  supplierFeedStock: { label: "Supplier Feed Stock", title: "Supplier feed stock for this plant & component" },
   inTransitStock: { label: "In Transit Stock", title: "In-transit stock quantity for this plant & component" },
   stvStock: { label: "STV Stock", title: "STV stock quantity for this plant & component" },
   conversionFactor: { label: "Conversion Factor", title: "Shared across all rows of the same type (RM/PM)" },
@@ -654,6 +663,14 @@ export function CustomOverridesForm({
                             className="w-full px-1.5 py-1 rounded text-[10px] font-bold text-center focus:outline-none"
                             style={showErrors && !col.row.componentCode ? headerInputErrorStyle : headerInputStyle}
                           />
+                          {col.row.componentCode && (
+                            <span
+                              className="text-[8px] font-semibold uppercase tracking-wide"
+                              style={{ color: "rgba(255,255,255,0.65)" }}
+                            >
+                              {getComponentUom(col.row.componentCode)}
+                            </span>
+                          )}
                         </div>
                       </th>
                     ),

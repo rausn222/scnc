@@ -765,21 +765,13 @@ export function CreateProjectModal({ open, existing, onClose, onCreated }: Props
 
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
-                type="button"
-                onClick={resetForm}
-                className="px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer"
-                style={{ color: "#64748b", border: "1px solid #d1d5db" }}
-              >
-                Clear
-              </button>
-              <button
                 type="submit"
                 disabled={!canSubmit || parsing}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: C.navy }}
               >
                 <Plus size={14} />
-                {parsing ? "Creating" : "Create New Project"}
+                {parsing ? "Saving" : "Save"}
               </button>
             </div>
           </form>

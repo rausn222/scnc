@@ -886,6 +886,16 @@ export const PLANT_CLUSTER_MAP: Record<string, string> = {
   U820: "IPF VIKRAM",
 };
 
+/**
+ * Whether a plant is company-owned ("own") or a third-party/toll manufacturer ("2p3p") —
+ * drives the IUT feasibility default Pre-IUT lead time (7 days for 2P/3P, 4 for own-to-own).
+ * Mock classification; only the plants used by IUT_TRANSFER_LANES are meaningfully set today.
+ */
+export const PLANT_OWNERSHIP_MAP: Record<string, "own" | "2p3p"> = {
+  U535: "own",
+  UTR: "2p3p",
+};
+
 const CLUSTER_DISPLAY_ORDER = [
   "North",
   "West",

@@ -1,10 +1,8 @@
 import { useState } from "react";
-import { Check, Info, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { ComponentCodeWithDesc } from "../../sciDetails/ComponentCodeWithDesc";
-import { ToggleSwitch } from "../../sciDetails/ToggleSwitch";
 import {
   C,
-  EXPANDED_BREAKDOWN_HEADER_BG,
   OPEN_PO_CANCELLABLE_LINES,
   OPEN_PO_LINES,
   OPEN_PO_STATUS_STYLE,
@@ -15,42 +13,36 @@ import {
 import { addDaysIso, daysPastDue } from "../../sciDetails/utils";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
 
-// Local one-off colors — no exact match in the shared C palette.
-const INFO_BANNER_BORDER = "#bfdbfe";
-const INFO_BANNER_TEXT = "#1e40af";
-
 const DEFAULT_ROWS_PER_PAGE = 10;
+// Caps the table's own scroll area so a large PO list scrolls internally
+// instead of stretching the whole modal.
+const TABLE_MAX_HEIGHT = "52vh";
 
 /**
- * Every PO line and its status are always visible on open — the cancel
- * toggle is the one functional gate: when off, every line is fixed/included
- * and the per-line include/exclude actions are disabled rather than hidden.
- * In-transit and partially delivered lines are always fixed regardless of
- * the toggle — stock already moving to the plant can't be pulled back.
+ * Every PO line and its status are always visible on open. Cancellable lines
+ * default to unchecked — the planner opts each one in via its checkbox, "Select
+ * all" in the header, or the Include all/Cancel all bulk actions. In-transit and
+ * partially delivered lines are always fixed — stock already moving to the
+ * plant can't be pulled back.
  */
 export function OpenPoAssumptionsContent({
-  openPoCancel,
   poIncludedByLine,
-  onToggleCancel,
   onSetLineIncluded,
   onBulkSetIncluded,
 }: {
-  openPoCancel: boolean;
   poIncludedByLine: Record<string, boolean>;
-  onToggleCancel: (v: boolean) => void;
   onSetLineIncluded: (id: string, v: boolean) => void;
   onBulkSetIncluded: (v: boolean) => void;
 }) {
   const totalQty = OPEN_PO_LINES.reduce((sum, l) => sum + l.qty, 0);
   const activeQty = OPEN_PO_LINES.reduce((sum, l) => {
     if (!isOpenPoLineCancellable(l.status)) return sum + l.qty;
-    const included = !openPoCancel || poIncludedByLine[l.id];
-    return included ? sum + l.qty : sum;
+    return poIncludedByLine[l.id] ? sum + l.qty : sum;
   }, 0);
   const includedCount =
     OPEN_PO_LINES.length -
     OPEN_PO_CANCELLABLE_LINES.length +
-    OPEN_PO_CANCELLABLE_LINES.filter((l) => !openPoCancel || poIncludedByLine[l.id]).length;
+    OPEN_PO_CANCELLABLE_LINES.filter((l) => poIncludedByLine[l.id]).length;
   const rmCount = OPEN_PO_LINES.filter((l) => l.type === "RM").length;
   const pmCount = OPEN_PO_LINES.filter((l) => l.type === "PM").length;
 
@@ -66,46 +58,19 @@ export function OpenPoAssumptionsContent({
 
   return (
     <div className="px-6 py-5 space-y-4">
-      <div
-        className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-4 py-3.5"
-        style={{ backgroundColor: C.bgSlateLight }}
-      >
-        <p className="text-xs" style={{ color: C.muted }}>
-          Allow open PO lines to be cancelled as part of the simulation.
-        </p>
-        <ToggleSwitch checked={openPoCancel} onChange={onToggleCancel} label="Open POs can be cancelled" />
-      </div>
-
-      {openPoCancel && (
-        <div
-          className="flex items-start gap-2.5 rounded-lg px-4 py-3"
-          style={{ backgroundColor: EXPANDED_BREAKDOWN_HEADER_BG, border: `1px solid ${INFO_BANNER_BORDER}` }}
-        >
-          <Info size={14} style={{ color: PM_BADGE.color, marginTop: 1, flexShrink: 0 }} />
-          <p className="text-xs" style={{ color: INFO_BANNER_TEXT }}>
-            PO cancellation will be included as a part of action items
-          </p>
-        </div>
-      )}
-
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span style={{ color: C.muted }}>
-          {openPoCancel
-            ? `${includedCount} of ${OPEN_PO_LINES.length} included — ${activeQty.toLocaleString("en-IN")} units active`
-            : `${totalQty.toLocaleString("en-IN")} units fixed — cancellation not enabled`}
+          {`${includedCount} of ${OPEN_PO_LINES.length} included — ${activeQty.toLocaleString("en-IN")} of ${totalQty.toLocaleString("en-IN")} units active`}
           {` — ${rmCount} RM · ${pmCount} PM`}
         </span>
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={!openPoCancel}
-            title={openPoCancel ? "Activate all cancellable open PO lines" : "Enable cancellation to change activation"}
-            className="flex text-xs items-center gap-1 px-2.5 py-1 rounded-full font-semibold transition-colors"
+            title="Activate all cancellable open PO lines"
+            className="flex text-xs items-center gap-1 px-2.5 py-1 rounded-full font-semibold transition-colors cursor-pointer"
             style={{
               backgroundColor: allCancellableActivated ? C.successBg : C.bgSlate,
               color: allCancellableActivated ? C.successText : C.borderMuted,
-              opacity: openPoCancel ? 1 : 0.5,
-              cursor: openPoCancel ? "pointer" : "not-allowed",
             }}
             onClick={() => onBulkSetIncluded(true)}
           >
@@ -114,14 +79,11 @@ export function OpenPoAssumptionsContent({
           </button>
           <button
             type="button"
-            disabled={!openPoCancel}
-            title={openPoCancel ? "Cancel all cancellable open PO lines" : "Enable cancellation to change activation"}
-            className="flex text-xs items-center gap-1 px-2.5 py-1 rounded-full font-semibold transition-colors"
+            title="Cancel all cancellable open PO lines"
+            className="flex text-xs items-center gap-1 px-2.5 py-1 rounded-full font-semibold transition-colors cursor-pointer"
             style={{
               backgroundColor: allCancellableCancelled ? C.dangerBg : C.bgSlate,
               color: allCancellableCancelled ? C.dangerDark : C.borderMuted,
-              opacity: openPoCancel ? 1 : 0.5,
-              cursor: openPoCancel ? "pointer" : "not-allowed",
             }}
             onClick={() => onBulkSetIncluded(false)}
           >
@@ -132,19 +94,29 @@ export function OpenPoAssumptionsContent({
       </div>
 
       <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
         <table className="w-full text-xs">
-          <thead>
+          <thead className="sticky top-0" style={{ zIndex: 1 }}>
             <tr style={{ backgroundColor: C.navy }}>
+              <th className="px-3 py-2.5 text-left" style={{ color: C.white, fontSize: 9 }}>
+                <input
+                  type="checkbox"
+                  checked={allCancellableActivated}
+                  ref={(el) => {
+                    if (el) el.indeterminate = !allCancellableActivated && !allCancellableCancelled;
+                  }}
+                  onChange={(e) => onBulkSetIncluded(e.target.checked)}
+                  title="Select all cancellable open PO lines"
+                  className="rounded cursor-pointer"
+                />
+              </th>
               {[
-                "INCL.",
                 "SITE CODE",
                 "SITE CLUSTER",
                 "MATERIAL",
                 "VENDOR",
                 "PO NUMBER",
                 "OPEN PO QTY",
-                "SUPPLIER INV.",
                 "UOM",
                 "DELIVERY DATE",
                 "ETA",
@@ -165,7 +137,7 @@ export function OpenPoAssumptionsContent({
           <tbody>
             {pagedLines.map((line) => {
               const cancellable = isOpenPoLineCancellable(line.status);
-              const effectivelyIncluded = !cancellable || !openPoCancel || poIncludedByLine[line.id];
+              const effectivelyIncluded = !cancellable || poIncludedByLine[line.id];
               // Partially delivered stock is still moving to the plant, same as fully
               // in-transit stock — shown as "In Transit" here so the status column
               // reflects that shared meaning instead of splitting it out visually.
@@ -174,11 +146,9 @@ export function OpenPoAssumptionsContent({
               const ageing = daysPastDue(line.poDeliveryDate);
               const checkboxTitle = !cancellable
                 ? "In-transit POs cannot be cancelled."
-                : openPoCancel
-                  ? poIncludedByLine[line.id]
-                    ? "Exclude this PO line"
-                    : "Include this PO line"
-                  : "Enable cancellation to change inclusion";
+                : poIncludedByLine[line.id]
+                  ? "Exclude this PO line"
+                  : "Include this PO line";
 
               return (
                 <tr key={line.id} style={{ borderTop: `1px solid ${C.bgSlate}` }}>
@@ -186,11 +156,11 @@ export function OpenPoAssumptionsContent({
                     <input
                       type="checkbox"
                       checked={effectivelyIncluded}
-                      disabled={!cancellable || !openPoCancel}
+                      disabled={!cancellable}
                       onChange={(e) => onSetLineIncluded(line.id, e.target.checked)}
                       title={checkboxTitle}
                       className="rounded"
-                      style={{ cursor: !cancellable || !openPoCancel ? "not-allowed" : "pointer" }}
+                      style={{ cursor: !cancellable ? "not-allowed" : "pointer" }}
                     />
                   </td>
                   <td className="px-3 py-2.5 font-medium whitespace-nowrap">{line.plant}</td>
@@ -221,12 +191,6 @@ export function OpenPoAssumptionsContent({
                     {line.poNumber}
                   </td>
                   <td className="px-3 py-2.5 font-bold">{line.qty.toLocaleString("en-IN")}</td>
-                  <td className="px-3 py-2.5" style={{ color: C.muted }}>
-                    {(line.status === "Partially Delivered"
-                      ? Math.round(line.qty / 2)
-                      : line.supplierInventory
-                    ).toLocaleString("en-IN")}
-                  </td>
                   <td className="px-3 py-2.5">{line.uom}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: C.muted }}>
                     {line.poDeliveryDate}

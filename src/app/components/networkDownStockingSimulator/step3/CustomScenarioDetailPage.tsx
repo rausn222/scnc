@@ -67,7 +67,6 @@ const FLAG_DOT_COLOR = "#f59e0b";
 const OK_DOT_COLOR = "#22c55e";
 const HIGH_TAG_BG = "#fef2f2";
 const SEARCH_INPUT_BORDER = "#d1d5db";
-const TEAL_GRADIENT_END = "#00897B";
 /** How long the Customise → Done commit (saving the edited Business Waste / FG Days Cover as a
     new custom scenario) spends in its loading state — same pattern as "Generate Scenario" and
     "Save Scenario" elsewhere in this feature. */
@@ -349,16 +348,13 @@ function OrderMiniCard({
           <div className="flex items-center gap-1 flex-wrap text-[10px] tabular-nums" style={{ color: C.muted }}>
             <span>Qty</span>
             <InlineNumberField value={line.orderQty} onChange={(orderQty) => onChange({ orderQty })} />
-            <span>· ₹</span>
-            <InlineNumberField value={line.pricePerUnit} onChange={(pricePerUnit) => onChange({ pricePerUnit })} width={44} />
-            <span>/unit</span>
           </div>
         </div>
       ) : (
         <>
           <div className="text-[11px] font-bold" style={{ color: C.navy }}>{line.name} · {line.supplier}</div>
           <div className="text-[10px] tabular-nums" style={{ color: C.muted }}>
-            {formatIndianNumber(line.orderQty)} units · ₹{line.pricePerUnit}/unit · ₹{formatIndianNumber(line.orderQty * line.pricePerUnit)}
+            {formatIndianNumber(line.orderQty)} units
           </div>
         </>
       )}
@@ -580,7 +576,7 @@ export function CustomScenarioDetailPage({
                   key={id}
                   type="button"
                   onClick={() => setSectionLayout(id)}
-                  title={`View Overview / IUT Transfer / Procurement stacked ${label === "Vertical" ? "(current)" : "side-by-side"}`}
+                  title={`View Overview / IUT Transfer / Procure stacked ${label === "Vertical" ? "(current)" : "side-by-side"}`}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-colors"
                   style={
                     sectionLayout === id
@@ -666,7 +662,7 @@ export function CustomScenarioDetailPage({
                     </div>
                     <div className="grid grid-cols-3 gap-1.5">
                       {[
-                        { label: "Total Cost", value: `₹${formatIndianNumber(option.totalCost)}` },
+                        { label: "IUT Cost", value: `₹${formatIndianNumber(iutSummaryByOption[option.id].totalCost)}` },
                         { label: `FG · ${option.plants[0].code}`, value: formatIndianNumber(option.plants[0].finalFgProducible) },
                         { label: `FG · ${option.plants[1].code}`, value: formatIndianNumber(option.plants[1].finalFgProducible) },
                       ].map((stat) => (
@@ -724,7 +720,7 @@ export function CustomScenarioDetailPage({
                 </span>
               </div>
               <span className="text-sm font-bold text-white tabular-nums">
-                Total ₹{formatIndianNumber(selectedOption.totalCost)}
+                IUT cost ₹{formatIndianNumber(iutSummary.totalCost)}
               </span>
             </div>
 
@@ -1029,7 +1025,7 @@ export function CustomScenarioDetailPage({
                   <table className="w-full text-xs">
                     <thead>
                       <tr style={{ backgroundColor: C.navy }}>
-                        {["MATERIAL", "TRANSFER QTY", "LEAD TIME", "INITIATION", "COST / TRIP"].map((h, i, arr) => (
+                        {["MATERIAL", "TRANSFER QTY", "LEAD TIME", "INITIATION", "LANE AVAILABILITY", "COST / TRIP"].map((h, i, arr) => (
                           <th
                             key={h}
                             className={`py-3 font-bold uppercase tracking-wide whitespace-nowrap ${
@@ -1086,6 +1082,9 @@ export function CustomScenarioDetailPage({
                             <td className="px-3 py-3 text-right whitespace-nowrap" style={{ color: C.muted }}>
                               {material.initiationDate}
                             </td>
+                            <td className="px-3 py-3 text-right whitespace-nowrap">
+                              {laneStatusBadge(selectedOption.laneAvailable)}
+                            </td>
                             <td className="pl-3 pr-4 py-3 text-right font-semibold tabular-nums" style={{ color: C.navy }}>
                               {isCustomising ? (
                                 <InlineNumberField value={material.costPerTrip} onChange={(costPerTrip) => updateIutOverride(material.code, { costPerTrip })} width={52} />
@@ -1100,6 +1099,7 @@ export function CustomScenarioDetailPage({
                         <td className="pl-4 pr-3 py-3 font-bold" style={{ color: C.navy }}>Total · {iutSummary.materialCount} materials</td>
                         <td className="px-3 py-3 text-right font-bold tabular-nums" style={{ color: C.navy }}>{formatIndianNumber(iutSummary.totalQty)} EA</td>
                         <td className="px-3 py-3 text-right font-bold tabular-nums" style={{ color: C.navy }}>max {iutSummary.maxLeadTimeDays} days</td>
+                        <td className="px-3 py-3" />
                         <td className="px-3 py-3" />
                         <td className="pl-3 pr-4 py-3 text-right font-bold tabular-nums" style={{ color: C.navy }}>₹{formatIndianNumber(iutSummary.totalCost)}</td>
                       </tr>
@@ -1121,7 +1121,7 @@ export function CustomScenarioDetailPage({
           </SectionCard>
 
           {/* ── Procurement ── */}
-          <SectionCard icon={<ShoppingCart size={13} />} title="Procurement" accent={C.teal}>
+          <SectionCard icon={<ShoppingCart size={13} />} title="Procure" accent={C.teal}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap text-[11px]" style={{ color: C.muted }}>
                 <span className="font-semibold" style={{ color: C.navy }}>{procurementSummary.orderCount} purchase orders</span>
@@ -1149,7 +1149,7 @@ export function CustomScenarioDetailPage({
                   style={{ backgroundColor: C.bgSlateLight, border: `1px solid ${C.border}`, color: C.navy }}
                 >
                   <span>Estimated Total</span>
-                  <span className="tabular-nums">{formatIndianNumber(procurementSummary.totalQty)} units · ₹{formatIndianNumber(procurementSummary.totalValue)}</span>
+                  <span className="tabular-nums">{formatIndianNumber(procurementSummary.totalQty)} units</span>
                 </div>
               </div>
             ) : (
@@ -1158,7 +1158,7 @@ export function CustomScenarioDetailPage({
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ backgroundColor: C.navy }}>
-                      {["MATERIAL", "PLANT", "SUPPLIER", "ORDER QTY", "MOQ", "PRICE / UNIT", "TOTAL"].map((h, i, arr) => (
+                      {["MATERIAL", "PLANT", "SUPPLIER", "ORDER QTY", "MOQ"].map((h, i, arr) => (
                         <th
                           key={h}
                           className={`py-3 font-bold uppercase tracking-wide whitespace-nowrap ${
@@ -1174,7 +1174,6 @@ export function CustomScenarioDetailPage({
                   <tbody>
                     {pagedProcurementLines.map((material) => {
                       const overOrder = material.neededQty < material.moq;
-                      const total = material.orderQty * material.pricePerUnit;
                       return (
                         <tr key={material.code} style={{ borderTop: `1px solid ${C.bgSlate}`, backgroundColor: overOrder ? C.warningBgLight : C.white }}>
                           <td className="pl-4 pr-3 py-3">
@@ -1216,24 +1215,14 @@ export function CustomScenarioDetailPage({
                               `${formatIndianNumber(material.orderQty)} units`
                             )}
                           </td>
-                          <td className="px-3 py-3 text-right tabular-nums" style={{ color: C.muted }}>{formatIndianNumber(material.moq)} units</td>
-                          <td className="px-3 py-3 text-right tabular-nums" style={{ color: C.muted }}>
-                            {isCustomising ? (
-                              <InlineNumberField value={material.pricePerUnit} onChange={(pricePerUnit) => updateProcurementOverride(material.code, { pricePerUnit })} width={52} />
-                            ) : (
-                              `₹${material.pricePerUnit}`
-                            )}
-                          </td>
-                          <td className="pl-3 pr-4 py-3 text-right font-bold tabular-nums" style={{ color: C.blue }}>₹{formatIndianNumber(total)}</td>
+                          <td className="pl-3 pr-4 py-3 text-right tabular-nums" style={{ color: C.muted }}>{formatIndianNumber(material.moq)} units</td>
                         </tr>
                       );
                     })}
                     <tr style={{ borderTop: `2px solid ${C.border}`, backgroundColor: C.bgSlateLight }}>
                       <td className="pl-4 pr-3 py-3 font-bold" style={{ color: C.navy }}>Estimated Total</td>
                       <td className="px-3 py-3" colSpan={3} />
-                      <td className="px-3 py-3" />
-                      <td className="px-3 py-3 text-right font-bold tabular-nums" style={{ color: C.navy }}>{formatIndianNumber(procurementSummary.totalQty)} units</td>
-                      <td className="pl-3 pr-4 py-3 text-right font-bold tabular-nums" style={{ color: C.navy }}>₹{formatIndianNumber(procurementSummary.totalValue)}</td>
+                      <td className="pl-3 pr-4 py-3 text-right font-bold tabular-nums" style={{ color: C.navy }}>{formatIndianNumber(procurementSummary.totalQty)} units</td>
                     </tr>
                   </tbody>
                 </table>
@@ -1249,13 +1238,6 @@ export function CustomScenarioDetailPage({
               )}
               </div>
             )}
-            <div
-              className="rounded-xl px-4 py-3.5 flex items-center justify-between gap-3"
-              style={{ background: `linear-gradient(135deg, ${C.teal} 0%, ${TEAL_GRADIENT_END} 100%)` }}
-            >
-              <span className="text-sm font-bold text-white">Total Procurement Cost</span>
-              <span className="text-lg font-bold text-white tabular-nums">₹{formatIndianNumber(selectedOption.totalCost)}</span>
-            </div>
           </SectionCard>
           </div>
         </>
@@ -1426,7 +1408,7 @@ export function CustomScenarioDetailPage({
                   </tr>
                 )}
 
-                <CompareSectionHeaderRow icon={<ShoppingCart size={12} />} label="Procurement" colSpan={visibleOptions.length + 1} accent={C.teal} />
+                <CompareSectionHeaderRow icon={<ShoppingCart size={12} />} label="Procure" colSpan={visibleOptions.length + 1} accent={C.teal} />
 
                 <tr style={{ borderTop: `1px solid ${C.bgSlate}` }}>
                   <td className="px-4 py-3 text-[13px]" style={{ color: C.mutedDark, borderRight: `1px solid ${C.border}` }}>Purchase Orders</td>
@@ -1495,13 +1477,13 @@ export function CustomScenarioDetailPage({
                 <MetricRow
                   label={
                     <span className="inline-flex items-center gap-1.5">
-                      <Trophy size={12} style={{ color: C.warning }} />Total Procurement Cost
+                      <Trophy size={12} style={{ color: C.warning }} />IUT Cost
                     </span>
                   }
                   cells={visibleOptions.map((option, i) => ({
                     key: option.id,
-                    content: `₹${formatIndianNumber(option.totalCost)}`,
-                    tag: tagComparisonValues(visibleOptions.map((o) => o.totalCost), false)[i],
+                    content: `₹${formatIndianNumber(iutSummaryByOption[option.id].totalCost)}`,
+                    tag: tagComparisonValues(visibleOptions.map((o) => iutSummaryByOption[o.id].totalCost), false)[i],
                   }))}
                 />
               </tbody>

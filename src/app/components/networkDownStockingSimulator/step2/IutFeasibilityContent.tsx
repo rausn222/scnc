@@ -9,7 +9,7 @@ import {
   RM_BADGE,
   PM_BADGE,
 } from "../../sciDetails/constants";
-import { confidenceMeta } from "../../sciDetails/utils";
+import { occurrenceConfidenceMeta } from "../../sciDetails/utils";
 import { PLANT_CLUSTER_MAP } from "../../data";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
 
@@ -19,6 +19,9 @@ const CHECKBOX_ACCENT_COLOR = "#1769c2";
 const MAX_CONTRACT_LEAD_TIME_DAYS = 300;
 const MAX_SHELF_LIFE_THRESHOLD_DAYS = 30;
 const DEFAULT_ROWS_PER_PAGE = 10;
+// Transfer route, Material, [Pre-IUT lead time, Transit time, Shelf-life threshold,
+// Total lead time], Confidence, Possible.
+const TOTAL_COLUMNS = 8;
 
 export type MaterialBatchRow = {
   plant: string;
@@ -63,8 +66,12 @@ export function getMaterialBatchKey(row: MaterialBatchRow) {
 }
 
 const SHELF_LIFE_THRESHOLD_HELP = "Minimum shelf life for material to be considered for IUT";
+const POSSIBLE_HELP = "Whether this lane is feasible for IUT, based on lead time, shelf life and contract terms for the materials involved";
 
-const TABLE_HEADERS = ["TRANSFER ROUTE", "MATERIAL", "TRANSIT TIME", "ADDITIONAL LEAD TIME", "SHELF-LIFE THRESHOLD", "CONFIDENCE", "POSSIBLE"];
+function parseDaysLabel(label: string): number {
+  const n = parseInt(label, 10);
+  return Number.isFinite(n) ? n : 0;
+}
 
 /** Compact lane label sized to match the table's own text-xs baseline — PlantRouteLabel
  * itself runs larger (text-sm) for use outside tables, so it isn't reused here. */
@@ -124,16 +131,44 @@ export function IutFeasibilityContent({
         <table className="w-full text-xs">
           <thead>
             <tr style={{ backgroundColor: C.navy }}>
-              {TABLE_HEADERS.map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap"
-                  style={{ color: C.white, fontSize: 9 }}
-                  title={h === "SHELF-LIFE THRESHOLD" ? SHELF_LIFE_THRESHOLD_HELP : undefined}
-                >
-                  {h}
-                </th>
-              ))}
+              <th rowSpan={2} className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap align-bottom" style={{ color: C.white, fontSize: 9 }}>
+                TRANSFER ROUTE
+              </th>
+              <th rowSpan={2} className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap align-bottom" style={{ color: C.white, fontSize: 9 }}>
+                MATERIAL
+              </th>
+              <th colSpan={4} className="px-3 py-1.5 text-center font-bold uppercase tracking-wide whitespace-nowrap" style={{ color: C.white, fontSize: 9, borderBottom: "1px solid rgba(255,255,255,0.25)" }}>
+                LEAD TIME
+              </th>
+              <th rowSpan={2} className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap align-bottom" style={{ color: C.white, fontSize: 9 }}>
+                CONFIDENCE
+              </th>
+              <th
+                rowSpan={2}
+                className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap align-bottom"
+                style={{ color: C.white, fontSize: 9 }}
+                title={POSSIBLE_HELP}
+              >
+                POSSIBLE
+              </th>
+            </tr>
+            <tr style={{ backgroundColor: C.navy }}>
+              <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap" style={{ color: C.white, fontSize: 9 }}>
+                PRE-IUT LEAD TIME
+              </th>
+              <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap" style={{ color: C.white, fontSize: 9 }}>
+                TRANSIT TIME
+              </th>
+              <th
+                className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap"
+                style={{ color: C.white, fontSize: 9 }}
+                title={SHELF_LIFE_THRESHOLD_HELP}
+              >
+                SHELF-LIFE THRESHOLD
+              </th>
+              <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap" style={{ color: C.white, fontSize: 9 }}>
+                TOTAL LEAD TIME
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -148,6 +183,8 @@ export function IutFeasibilityContent({
                 .filter(({ batchRows }) => batchRows.length > 0);
               const hasLaneBatches = materialsWithBatches.length > 0;
               const isExpanded = hasLaneBatches && (expanded[laneKey] ?? false);
+              const preIutDays = parseDaysLabel(contractLeadTimes[laneKey] ?? "7");
+              const transitDays = parseDaysLabel(lane.transitTime);
 
               return (
                 <Fragment key={laneKey}>
@@ -195,18 +232,13 @@ export function IutFeasibilityContent({
                   )}
 
                   <td className="px-3 py-2.5">
-                    <span className="font-semibold whitespace-nowrap" style={{ color: C.navy }}>
-                      {lane.transitTime}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5">
                     <div className="relative w-24">
                       <input
                         type="number"
                         min={0}
                         max={MAX_CONTRACT_LEAD_TIME_DAYS}
                         maxLength={3}
-                        value={contractLeadTimes[laneKey] ?? "3"}
+                        value={contractLeadTimes[laneKey] ?? "7"}
                         onChange={(e) => {
                           const value = e.target.value;
                           if (value === "" || Number(value) >= 0) {
@@ -219,6 +251,11 @@ export function IutFeasibilityContent({
                         days
                       </span>
                     </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className="font-semibold whitespace-nowrap" style={{ color: C.navy }}>
+                      {lane.transitTime}
+                    </span>
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="space-y-2.5">
@@ -241,7 +278,7 @@ export function IutFeasibilityContent({
                                 min={0}
                                 max={MAX_SHELF_LIFE_THRESHOLD_DAYS}
                                 step={1}
-                                value={batchThresholds[mat.code] ?? ""}
+                                value={batchThresholds[mat.code] ?? "7"}
                                 onChange={(e) => {
                                   const value = e.target.value;
                                   if (value === "" || (Number(value) >= 0 && Number(value) <= MAX_SHELF_LIFE_THRESHOLD_DAYS)) {
@@ -260,13 +297,37 @@ export function IutFeasibilityContent({
                       )}
                     </div>
                   </td>
+                  <td className="px-3 py-2.5">
+                    <div className="space-y-2.5">
+                      {materials.length === 0 ? (
+                        <span style={{ color: C.borderMuted }}>—</span>
+                      ) : (
+                        materials.map((mat) => {
+                          const hasBatches = MATERIAL_BATCH_DATA.some((b) => b.materialCode === mat.code);
+                          if (!hasBatches) {
+                            return (
+                              <div key={mat.code} className="h-[26px] flex items-center" style={{ color: C.borderLight }}>
+                                —
+                              </div>
+                            );
+                          }
+                          const shelfDays = parseDaysLabel(batchThresholds[mat.code] ?? "7");
+                          return (
+                            <div key={mat.code} className="h-[26px] flex items-center font-semibold whitespace-nowrap" style={{ color: C.navy }}>
+                              {preIutDays + transitDays + shelfDays} days
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </td>
 
                   <td className="px-3 py-2.5">
                     <span
                       className="font-bold tabular-nums whitespace-nowrap"
-                      style={{ color: confidenceMeta(lane.confidenceScore).color }}
+                      style={{ color: occurrenceConfidenceMeta(lane.iutOccurrences12mo).color }}
                     >
-                      {lane.confidenceScore}%
+                      {lane.iutOccurrences12mo} times
                     </span>
                   </td>
 
@@ -301,68 +362,79 @@ export function IutFeasibilityContent({
 
                 {isExpanded && (
                   <tr style={{ borderTop: `1px solid ${C.bgSlate}` }}>
-                    <td colSpan={TABLE_HEADERS.length} className="px-3 pb-3 pt-0" style={{ backgroundColor: C.bgSlateLight }}>
-                      <div className="ml-[22px] flex flex-col items-start gap-3">
-                        {materialsWithBatches.map(({ mat, batchRows }) => (
-                          <div
-                            key={mat.code}
-                            className="rounded-lg bg-white overflow-hidden"
-                            style={{ border: "1px solid rgba(21,101,192,0.12)" }}
-                          >
-                            <table className="text-[11px]">
-                              <thead>
-                                <tr style={{ backgroundColor: EXPANDED_BREAKDOWN_HEADER_BG }}>
-                                  <th className="w-10 px-4 py-1.5" />
-                                  <th
-                                    className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
-                                    style={{ color: C.muted, fontSize: 9 }}
-                                  >
-                                    Plant
-                                  </th>
-                                  <th
-                                    className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
-                                    style={{ color: C.muted, fontSize: 9 }}
-                                  >
-                                    Batch Number
-                                  </th>
-                                  <th
-                                    className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
-                                    style={{ color: C.muted, fontSize: 9 }}
-                                  >
-                                    Expiry Date
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {batchRows.map((batch) => {
-                                  const batchKey = getMaterialBatchKey(batch);
-                                  return (
-                                    <tr key={batchKey} style={{ borderTop: `1px solid ${C.bgSlate}` }}>
-                                      <td className="px-4 py-1.5">
-                                        <input
-                                          type="checkbox"
-                                          checked={selectedBatches[batchKey] ?? true}
-                                          onChange={() => onBatchToggle?.(batchKey)}
-                                          className="h-3.5 w-3.5"
-                                          style={{ accentColor: CHECKBOX_ACCENT_COLOR }}
-                                        />
-                                      </td>
-                                      <td className="px-4 py-1.5 font-semibold whitespace-nowrap" style={{ color: C.blue }}>
-                                        {batch.plant}
-                                      </td>
-                                      <td className="px-4 py-1.5 tabular-nums whitespace-nowrap" style={{ color: C.navy }}>
-                                        {batch.batchNumber}
-                                      </td>
-                                      <td className="px-4 py-1.5 tabular-nums whitespace-nowrap" style={{ color: C.borderMuted }}>
-                                        {batch.expiryDate}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        ))}
+                    <td colSpan={TOTAL_COLUMNS} className="px-3 pb-3 pt-0" style={{ backgroundColor: C.bgSlateLight }}>
+                      <div className="ml-[22px] rounded-lg bg-white overflow-hidden" style={{ border: "1px solid rgba(21,101,192,0.12)" }}>
+                        <table className="text-[11px] w-full">
+                          <thead>
+                            <tr style={{ backgroundColor: EXPANDED_BREAKDOWN_HEADER_BG }}>
+                              <th className="w-10 px-4 py-1.5" />
+                              <th
+                                className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
+                                style={{ color: C.muted, fontSize: 9 }}
+                              >
+                                Material
+                              </th>
+                              <th
+                                className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
+                                style={{ color: C.muted, fontSize: 9 }}
+                              >
+                                Plant
+                              </th>
+                              <th
+                                className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
+                                style={{ color: C.muted, fontSize: 9 }}
+                              >
+                                Batch Number
+                              </th>
+                              <th
+                                className="px-4 py-1.5 text-left font-bold uppercase tracking-wide"
+                                style={{ color: C.muted, fontSize: 9 }}
+                              >
+                                Expiry Date
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {materialsWithBatches.flatMap(({ mat, batchRows }) =>
+                              batchRows.map((batch) => {
+                                const batchKey = getMaterialBatchKey(batch);
+                                return (
+                                  <tr key={batchKey} style={{ borderTop: `1px solid ${C.bgSlate}` }}>
+                                    <td className="px-4 py-1.5">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedBatches[batchKey] ?? true}
+                                        onChange={() => onBatchToggle?.(batchKey)}
+                                        className="h-3.5 w-3.5"
+                                        style={{ accentColor: CHECKBOX_ACCENT_COLOR }}
+                                      />
+                                    </td>
+                                    <td className="px-4 py-1.5">
+                                      <div className="flex items-center gap-1.5">
+                                        <span
+                                          className="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0"
+                                          style={{ backgroundColor: mat.type === "RM" ? RM_BADGE.bg : PM_BADGE.bg, color: mat.type === "RM" ? RM_BADGE.color : PM_BADGE.color }}
+                                        >
+                                          {mat.type}
+                                        </span>
+                                        <ComponentCodeWithDesc code={mat.code} description={mat.description} className="text-[11px]" />
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-1.5 font-semibold whitespace-nowrap" style={{ color: C.blue }}>
+                                      {batch.plant}
+                                    </td>
+                                    <td className="px-4 py-1.5 tabular-nums whitespace-nowrap" style={{ color: C.navy }}>
+                                      {batch.batchNumber}
+                                    </td>
+                                    <td className="px-4 py-1.5 tabular-nums whitespace-nowrap" style={{ color: C.borderMuted }}>
+                                      {batch.expiryDate}
+                                    </td>
+                                  </tr>
+                                );
+                              }),
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </td>
                   </tr>

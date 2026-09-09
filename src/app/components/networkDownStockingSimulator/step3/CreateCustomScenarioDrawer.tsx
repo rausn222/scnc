@@ -78,7 +78,7 @@ export function CreateCustomScenarioDrawer({
             disabled={!isFormValid || isSaving}
             onClick={handleSave}
             className="px-4 py-2 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5"
-            title={isFormValid ? "Save this custom scenario" : "Complete all IUT and Procurement fields to save"}
+            title={isFormValid ? "Save this custom scenario" : "Complete all IUT and Procure fields to save"}
             style={{
               backgroundColor: isFormValid ? C.blue : C.borderLight,
               color: C.white,
