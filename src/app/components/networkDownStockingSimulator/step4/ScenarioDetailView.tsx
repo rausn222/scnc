@@ -3,25 +3,19 @@ import { Check, Link2Off, Search } from "lucide-react";
 import type { CBURow } from "../../data";
 import { ProductionPlanModal } from "../../ProductionPlanModal";
 import type { TransferScenarioId, ComponentBreakdownRow } from "../../sciDetails/types";
-import {
-  C,
-  MOQ_PLANT_OPTIONS,
-  MOQ_PLANT_OPTIONS_BREAK,
-  IUT_TRANSFER_OPTIONS,
-  PLANT_BREAKDOWN_BASE,
-  PREDEFINED_DETAIL,
-  CUSTOM_SCENARIO,
-} from "../../sciDetails/constants";
+import { C } from "../../sciDetails/constants";
 import { getActivePlantRoles, computeTransitionRows } from "../../sciDetails/utils";
 import {
   TransposedComponentBreakdownTable,
   type TransposedBreakdownColumn,
 } from "./TransposedComponentBreakdownTable";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
+import type { ScenarioCatalog } from "../../../api/networkDownStockingSimulator/step3Api";
 
 const DEFAULT_ROWS_PER_PAGE = 10;
 
 export function ScenarioDetailView({
+  catalog,
   row,
   scenarioId,
   selTransfer,
@@ -29,6 +23,7 @@ export function ScenarioDetailView({
   moqSuppliers,
   onMoqSupplier,
 }: {
+  catalog: ScenarioCatalog;
   row: CBURow;
   scenarioId: string;
   selTransfer: string;
@@ -58,12 +53,12 @@ export function ScenarioDetailView({
     scenarioId === "iut" || scenarioId === "iut-moq" || scenarioId === "iut-moq-break";
   const showMoqPicker =
     scenarioId === "moq" || scenarioId === "iut-moq" || scenarioId === "iut-moq-break";
-  const transferPickerOptions = IUT_TRANSFER_OPTIONS.slice(0, scenarioId === "iut-moq" ? 3 : 2);
+  const transferPickerOptions = catalog.iutTransferOptions.slice(0, scenarioId === "iut-moq" ? 3 : 2);
   // "Break MOQ" scenarios draw from a distinct (smaller) set of order quantities —
   // must match ScenarioDetailCard's isBreakMoq split, or Open PO here disagrees with
   // the Procurement Options panel above it.
   const moqOptionsForScenario =
-    scenarioId === "iut-moq-break" ? MOQ_PLANT_OPTIONS_BREAK : MOQ_PLANT_OPTIONS;
+    scenarioId === "iut-moq-break" ? catalog.moqPlantOptionsBreak : catalog.moqPlantOptions;
 
   const selectedTransfer = showTransferPicker
     ? transferPickerOptions.find((o) => o.id === selTransfer) ?? null
@@ -120,7 +115,7 @@ export function ScenarioDetailView({
           .filter((r) => matched.has(r.component))
           .map((r) => [r.component, r]),
       );
-      const plantMeta = PLANT_BREAKDOWN_BASE[block.code];
+      const plantMeta = catalog.plantBreakdownBase[block.code];
 
       for (const before of beforeRows) {
         cols.push({
@@ -142,7 +137,7 @@ export function ScenarioDetailView({
   // pagination hooks can stay unconditional too. Row count never actually exceeds 10 (currently
   // fixed at 5), so the pager below effectively never renders, but the same standard pattern is
   // applied for consistency and in case the dataset grows later.
-  const predefinedDetail = PREDEFINED_DETAIL;
+  const predefinedDetail = catalog.predefinedDetail;
   const predefinedProductionStopDate = "—";
   const predefinedSavingsAmount = predefinedDetail.moq.originalOrderCost - predefinedDetail.moq.totalOrderCost;
   const predefinedSummaryRows: { label: string; node: React.ReactNode }[] = [
@@ -258,7 +253,7 @@ export function ScenarioDetailView({
           plantCode={productionPlanPlant}
           cbuCode={row.cbuCode}
           cbuDescription={row.cbuDescription}
-          totalProduction={PLANT_BREAKDOWN_BASE[productionPlanPlant]?.totalProductionPlanQty ?? 0}
+          totalProduction={catalog.plantBreakdownBase[productionPlanPlant]?.totalProductionPlanQty ?? 0}
           onClose={() => setProductionPlanPlant(null)}
         />
       )}
@@ -299,7 +294,7 @@ export function ScenarioDetailView({
       {/* <ScenarioDetailCard key={scenarioId} scenarioId={scenarioId} cardDefs={cardDefs} /> */}
 
       {/* Component breakdown table — not applicable to the Custom scenario */}
-      {scenarioId !== CUSTOM_SCENARIO.id && (
+      {scenarioId !== catalog.customScenario.id && (
       <div
         className="rounded-xl overflow-hidden bg-white"
         style={{

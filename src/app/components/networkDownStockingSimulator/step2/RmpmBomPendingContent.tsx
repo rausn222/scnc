@@ -5,12 +5,11 @@ import {
   C,
   RM_BADGE,
   PM_BADGE,
-  RMPM_BOM_PENDING_LIES_WITH,
-  RMPM_CONNECTIVITY_STATUS_MESSAGE,
   type RmpmBomConnectivityRow,
   type RmpmBomPendingStatus,
 } from "../../sciDetails/constants";
 import { DateWeekEditor } from "../../sciDetails/step2/DateWeekEditor";
+import type { SimulationAssumptionsCatalog } from "../../../api/networkDownStockingSimulator/step2Api";
 
 // Local one-off colors — no exact match in the shared C palette.
 const ISSUE_TEXT_COLOR = "#b45309";
@@ -92,9 +91,13 @@ function ContractAvailabilityCell({ group }: { group: BomGroup }) {
 export function RmpmBomPendingContent({
   rows,
   status,
+  rmpmBomPendingLiesWith,
+  rmpmConnectivityStatusMessage,
 }: {
   rows: RmpmBomConnectivityRow[];
   status: RmpmBomPendingStatus;
+  rmpmBomPendingLiesWith: SimulationAssumptionsCatalog["rmpmBomPendingLiesWith"];
+  rmpmConnectivityStatusMessage: SimulationAssumptionsCatalog["rmpmConnectivityStatusMessage"];
 }) {
   const groups = useMemo(() => groupBomRows(rows), [rows]);
   const [dates, setDates] = useState<Record<string, string>>({});
@@ -132,10 +135,10 @@ export function RmpmBomPendingContent({
         <AlertTriangle size={16} style={{ color: C.warningText, marginTop: 1, flexShrink: 0 }} />
         <div>
           <p className="text-sm font-bold mb-1" style={{ color: C.warningTextDark }}>
-            {RMPM_BOM_PENDING_LIES_WITH[status]}
+            {rmpmBomPendingLiesWith[status]}
           </p>
           <p className="text-xs leading-relaxed" style={{ color: C.warningTextDark }}>
-            {RMPM_CONNECTIVITY_STATUS_MESSAGE[status]}
+            {rmpmConnectivityStatusMessage[status]}
           </p>
         </div>
       </div>

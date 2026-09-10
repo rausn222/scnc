@@ -1,25 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeftRight, Box, Calendar, ListChecks, Loader2, ShoppingCart, SlidersHorizontal, Warehouse } from "lucide-react";
-import { PLANT_OWNERSHIP_MAP, type CBURow } from "../../data";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { AlertTriangle, ArrowLeftRight, Box, Calendar, ListChecks, Loader2, ShoppingCart, SlidersHorizontal, Warehouse } from "lucide-react";
+import type { CBURow } from "../../data";
 import { StepSection } from "../StepSection";
 import {
   C,
-  IUT_TRANSFER_LANES,
-  MOQ_BREAK_MATERIALS,
-  MOQ_BREAK_SUPPLIERS,
-  OPEN_PO_LINES,
-  RMPM_BOM_CONNECTIVITY_ROWS,
-  RMPM_BOM_PENDING_LIES_WITH,
-  RMPM_BOM_PENDING_TILE_LABEL,
-  RMPM_CONNECTIVITY_STATUS_MESSAGE,
-  RMPM_CONNECTIVITY_STATUS_PILL_LABEL,
-  SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS,
   moqSupplierKey,
   type RmpmBomPendingStatus,
   type RmpmConnectivityStatus,
 } from "../../sciDetails/constants";
 import { buildOpenPoLinesForCbu, daysPastDue, formatIsoDateShort, getRmpmConnectivityStatus } from "../../sciDetails/utils";
-import type { CustomOverrideRow, PlantGroup } from "../../sciDetails/types";
 import { CustomOverridesForm } from "../../sciDetails/customOverrides/CustomOverridesForm";
 import { buildBaselineScenario, buildCustomScenarioBaseline } from "../../sciDetails/customOverrides/customOverridesUtils";
 import { DateAssumptionTile } from "./DateAssumptionTile";
@@ -28,10 +17,14 @@ import { Modal } from "../Modal";
 import { OpenPoAssumptionsContent } from "./OpenPoAssumptionsContent";
 import { RmpmConnectivityContent } from "./RmpmConnectivityContent";
 import { RmpmBomPendingContent } from "./RmpmBomPendingContent";
-import { IutFeasibilityContent, MATERIAL_BATCH_DATA, getMaterialBatchKey } from "./IutFeasibilityContent";
+import { IutFeasibilityContent } from "./IutFeasibilityContent";
 import { MoqBreakContent } from "./MoqBreakContent";
-import MaterialScopeContent, { MATERIAL_SCOPE_DATA } from "./MaterialScopeContent";
+import MaterialScopeContent from "./MaterialScopeContent";
 import { SupplierInventoryFeedstockContent } from "./SupplierInventoryFeedstockContent";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { initStep2, setStep2Field, type SciDetailStep2State } from "../../../store/slices/sciDetailSlice";
+import { useSimulationAssumptionsQuery } from "../../../queries/networkDownStockingSimulator";
+import { getMaterialBatchKey, type SimulationAssumptionsCatalog } from "../../../api/networkDownStockingSimulator/step2Api";
 
 type AssumptionModalKey = "openpo" | "rmpm" | "iut" | "moq" | "materialScope" | "custom" | "supplierInventory";
 
@@ -39,12 +32,88 @@ type AssumptionModalKey = "openpo" | "rmpm" | "iut" | "moq" | "materialScope" | 
 // step3/ScenarioComparisonStep's handleGenerateScenarios, so a save reads as real work.
 const CUSTOM_INPUTS_SAVE_DELAY_MS = 600;
 
+// Stable fallback so every computation below has something to read from while
+// useSimulationAssumptionsQuery is still loading, without ever being written into redux
+// (see the initStep2 effect, which is gated on the *real* query result, not this).
+const EMPTY_ASSUMPTIONS_CATALOG: SimulationAssumptionsCatalog = {
+  openPoLines: [],
+  moqBreakMaterials: [],
+  moqBreakSuppliers: {},
+  supplierInventoryFeedstockMaterials: [],
+  iutTransferLanes: [],
+  iutLaneRequirements: {},
+  materialScopeData: [],
+  materialBatchData: [],
+  rmpmBomConnectivityRows: [],
+  rmpmBomPendingLiesWith: { contract_pending: "", po_creation_pending: "" },
+  rmpmBomPendingTileLabel: { contract_pending: "", po_creation_pending: "" },
+  rmpmConnectivityStatusMessage: { bom_not_available: "", contract_pending: "", po_creation_pending: "" },
+  rmpmConnectivityStatusPillLabel: { bom_not_available: "", contract_pending: "", po_creation_pending: "" },
+  plantOwnershipMap: {},
+};
+
 function countPillStyle(count: number, total: number) {
   return {
     backgroundColor: count === total ? C.successBg : count === 0 ? C.bgSlate : C.warningBg,
     color: count === total ? C.successText : count === 0 ? C.muted : C.warningTextDark,
   };
 }
+
+/** Every Step 2 input's CBU-derived starting value — built from the fetched assumptions catalog
+ * whenever `step2` is null in the store (a genuinely new CBU, per resetOnCbuChange) so the tiles
+ * always have something to render immediately, then persisted via `initStep2` so subsequent
+ * edits have somewhere to write to. */
+function buildDefaultStep2State(
+  catalog: SimulationAssumptionsCatalog,
+  customInputsBaseline: ReturnType<typeof buildCustomScenarioBaseline>,
+): SciDetailStep2State {
+  const seed = buildBaselineScenario(customInputsBaseline);
+  return {
+    networkTransitionDate: "",
+    poIncludedByLine: Object.fromEntries(catalog.openPoLines.map((l) => [l.id, false])),
+    rmpmDate: "",
+    rmpmManualDate: "",
+    moqBreak: Object.fromEntries(
+      catalog.moqBreakMaterials.flatMap((mat) =>
+        (catalog.moqBreakSuppliers[mat.code] ?? []).map((s) => [moqSupplierKey(mat.code, s.name), false]),
+      ),
+    ),
+    batchThresholds: Object.fromEntries(
+      Array.from(new Set(catalog.materialBatchData.map((row) => row.materialCode))).map((code) => [code, "7"]),
+    ),
+    selectedBatches: Object.fromEntries(catalog.materialBatchData.map((row) => [getMaterialBatchKey(row), true])),
+    iutLanes: { "U535→UTR": true, "UTR→U535": true },
+    // Pre-IUT lead time defaults to 7 days when either endpoint plant is a 2P/3P
+    // (third-party) site, else 4 days for a purely own-to-own transfer.
+    contractLeadTimes: Object.fromEntries(
+      catalog.iutTransferLanes.map((lane) => {
+        const involvesThirdParty =
+          catalog.plantOwnershipMap[lane.from] === "2p3p" || catalog.plantOwnershipMap[lane.to] === "2p3p";
+        return [`${lane.from}→${lane.to}`, involvesThirdParty ? "7" : "4"];
+      }),
+    ),
+    materialScopeSelected: Object.fromEntries(
+      catalog.materialScopeData.map((material) => [material.materialCode, !material.newCbuAssociated]),
+    ),
+    customPlants: seed.plants,
+    customRows: seed.rows,
+    customFgUnits: {},
+    customProductionPlan: seed.productionPlan,
+    customInputsSaved: false,
+    // Supplier inventory pre-fills from open PO lines where a matching material exists —
+    // feedstock has no such source, so it starts from the mock value on each material.
+    supplierInventoryInputs: Object.fromEntries(
+      catalog.supplierInventoryFeedstockMaterials.map((material) => {
+        const match = catalog.openPoLines.find((l) => l.componentCode === material.materialCode);
+        return [material.materialCode, match ? String(match.supplierInventory) : ""];
+      }),
+    ),
+    feedstockInputs: Object.fromEntries(
+      catalog.supplierInventoryFeedstockMaterials.map((material) => [material.materialCode, String(material.feedstock)]),
+    ),
+  };
+}
+
 export function SimulationAssumptionsStep({
   oldCbuRow,
   newCbuRow,
@@ -55,147 +124,119 @@ export function SimulationAssumptionsStep({
   /** Called whenever the user changes an assumption that should mark the page's draft as dirty. */
   onDirty?: () => void;
 }) {
-  const [networkTransitionDate, setNetworkTransitionDate] = useState("");
-  const [poIncludedByLine, setPoIncludedByLine] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(OPEN_PO_LINES.map((l) => [l.id, false])),
-  );
-  const [rmpmDate, setRmpmDate] = useState("");
-  // Manual RMPM connectivity date shown inline on the tile when no New CBU is selected —
-  // there's no PO data to drive a modal in that case, so it skips straight to a date input.
-  const [rmpmManualDate, setRmpmManualDate] = useState("");
-  // Keyed by moqSupplierKey(materialCode, supplierName) — "can break MOQ" is tracked
-  // per supplier, since it can differ supplier to supplier within a material.
-  const [moqBreak, setMoqBreak] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      MOQ_BREAK_MATERIALS.flatMap((mat) =>
-        (MOQ_BREAK_SUPPLIERS[mat.code] ?? []).map((s) => [moqSupplierKey(mat.code, s.name), false]),
-      ),
-    ),
-  );
-  // Shelf-life threshold defaults to 7 days for every material with batch data —
-  // still freely editable per material from there.
-  const initialBatchThresholds = Object.fromEntries(
-    Array.from(new Set(MATERIAL_BATCH_DATA.map((row) => row.materialCode))).map((code) => [code, "7"]),
-  );
-  const [batchThresholds, setBatchThresholds] = useState<
-    Record<string, string>
-  >(initialBatchThresholds);
-  const [selectedBatches, setSelectedBatches] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(MATERIAL_BATCH_DATA.map((row) => [getMaterialBatchKey(row), true])),
+  const dispatch = useAppDispatch();
+
+  // New CBU is optional ("Old CBU required · New CBU optional" — see SelectCbuStep) — most
+  // scenarios never pick one. Customise Inputs still needs a CBU's BOM to seed from, so it
+  // falls back to the Old CBU whenever no New CBU is selected, instead of showing nothing.
+  const customInputsSourceRow = newCbuRow ?? oldCbuRow;
+  const customInputsBaseline = useMemo(
+    () => buildCustomScenarioBaseline(customInputsSourceRow),
+    [customInputsSourceRow],
   );
 
-  const [iutLanes, setIutLanes] = useState<Record<string, boolean>>({
-    "U535→UTR": true,
-    "UTR→U535": true,
-  });
-  // Pre-IUT lead time defaults to 7 days when either endpoint plant is a 2P/3P
-  // (third-party) site, else 4 days for a purely own-to-own transfer.
-  const initialLeadTimes = Object.fromEntries(
-    IUT_TRANSFER_LANES.map((lane) => {
-      const involvesThirdParty =
-        PLANT_OWNERSHIP_MAP[lane.from] === "2p3p" || PLANT_OWNERSHIP_MAP[lane.to] === "2p3p";
-      return [`${lane.from}→${lane.to}`, involvesThirdParty ? "7" : "4"];
-    })
-  );
+  // Step 2's own reference/catalog data — fetched based on the Step 1 selection (Old/New CBU).
+  const assumptionsQuery = useSimulationAssumptionsQuery(oldCbuRow.cbuCode, newCbuRow?.cbuCode);
+  const catalog = assumptionsQuery.data ?? EMPTY_ASSUMPTIONS_CATALOG;
 
-  const [contractLeadTimes, setContractLeadTimes] =
-    useState<Record<string, string>>(initialLeadTimes);
-  const [materialScopeSelected, setMaterialScopeSelected] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(MATERIAL_SCOPE_DATA.map((material) => [material.materialCode, !material.newCbuAssociated])),
-  );
-  // Lifted here (rather than inside the modal) so the customised inputs survive closing and
-  // reopening the popup — the 6th tile needs to show them filled in again on reopen.
-  const [customPlants, setCustomPlants] = useState<PlantGroup[]>([]);
-  const [customRows, setCustomRows] = useState<CustomOverrideRow[]>([]);
-  const [customFgUnits, setCustomFgUnits] = useState<Record<string, string>>({});
-  const [customProductionPlan, setCustomProductionPlan] = useState<Record<string, string>>({});
-  const [customInputsSaved, setCustomInputsSaved] = useState(false);
+  const storedStep2 = useAppSelector((s) => s.sciDetail.step2);
+  const defaultStep2 = useMemo(() => buildDefaultStep2State(catalog, customInputsBaseline), [catalog, customInputsBaseline]);
+  // Seeds the store the moment this CBU has no Step 2 state yet (a genuinely new CBU, per
+  // resetOnCbuChange) — gated on the *real* query result (not the empty fallback above) so a
+  // still-loading catalog never gets written into redux as if it were the real assumptions.
+  useLayoutEffect(() => {
+    if (!storedStep2 && assumptionsQuery.data) {
+      dispatch(initStep2(buildDefaultStep2State(assumptionsQuery.data, customInputsBaseline)));
+    }
+  }, [storedStep2, assumptionsQuery.data, customInputsBaseline, dispatch]);
+  const step2 = storedStep2 ?? defaultStep2;
+
+  const {
+    networkTransitionDate,
+    poIncludedByLine,
+    rmpmDate,
+    rmpmManualDate,
+    moqBreak,
+    batchThresholds,
+    selectedBatches,
+    iutLanes,
+    contractLeadTimes,
+    materialScopeSelected,
+    customPlants,
+    customRows,
+    customFgUnits,
+    customProductionPlan,
+    customInputsSaved,
+    supplierInventoryInputs,
+    feedstockInputs,
+  } = step2;
+
+  const updateStep2 = <K extends keyof SciDetailStep2State>(key: K, value: SciDetailStep2State[K]) => {
+    dispatch(setStep2Field({ key, value } as never));
+  };
+
   const [isSavingCustomInputs, setIsSavingCustomInputs] = useState(false);
   const [openModal, setOpenModal] = useState<AssumptionModalKey | null>(null);
 
-  // Supplier inventory pre-fills from OPEN_PO_LINES where a matching material exists —
-  // feedstock has no such source, so it starts from the mock value on each material.
-  const initialSupplierInventory = Object.fromEntries(
-    SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS.map((material) => {
-      const match = OPEN_PO_LINES.find((l) => l.componentCode === material.materialCode);
-      return [material.materialCode, match ? String(match.supplierInventory) : ""];
-    }),
-  );
-  const initialFeedstock = Object.fromEntries(
-    SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS.map((material) => [material.materialCode, String(material.feedstock)]),
-  );
-  const [supplierInventoryInputs, setSupplierInventoryInputs] = useState<Record<string, string>>(initialSupplierInventory);
-  const [feedstockInputs, setFeedstockInputs] = useState<Record<string, string>>(initialFeedstock);
-
   const handleNetworkTransitionDate = (v: string) => {
-    setNetworkTransitionDate(v);
+    updateStep2("networkTransitionDate", v);
     onDirty?.();
   };
   const handleSetLineIncluded = (id: string, v: boolean) => {
-    setPoIncludedByLine((prev) => ({ ...prev, [id]: v }));
+    updateStep2("poIncludedByLine", { ...poIncludedByLine, [id]: v });
     onDirty?.();
   };
   const handleBulkSetIncluded = (v: boolean) => {
-    setPoIncludedByLine((prev) => {
-      const next = { ...prev };
-      OPEN_PO_LINES.forEach((l) => { next[l.id] = v; });
-      return next;
-    });
+    const next = { ...poIncludedByLine };
+    catalog.openPoLines.forEach((l) => { next[l.id] = v; });
+    updateStep2("poIncludedByLine", next);
     onDirty?.();
   };
   const handleRmpmDate = (v: string) => {
-    setRmpmDate(v);
+    updateStep2("rmpmDate", v);
     onDirty?.();
   };
   const handleRmpmManualDate = (v: string) => {
-    setRmpmManualDate(v);
+    updateStep2("rmpmManualDate", v);
     onDirty?.();
   };
   const handleIutLaneToggle = (laneKey: string) => {
-    setIutLanes((prev) => ({ ...prev, [laneKey]: !prev[laneKey] }));
+    updateStep2("iutLanes", { ...iutLanes, [laneKey]: !iutLanes[laneKey] });
     onDirty?.();
   };
   const handleContractLeadTimeChange = (
     laneKey: string,
     value: string,
   ) => {
-    setContractLeadTimes((prev) => ({
-      ...prev,
-      [laneKey]: value,
-    }));
-
+    updateStep2("contractLeadTimes", { ...contractLeadTimes, [laneKey]: value });
     onDirty?.();
   };
   const handleBatchThresholdChange = (
     materialCode: string,
     value: string,
   ) => {
-    setBatchThresholds((previous) => ({
-      ...previous,
-      [materialCode]: value,
-    }));
-
+    updateStep2("batchThresholds", { ...batchThresholds, [materialCode]: value });
     onDirty?.();
   };
   const handleBatchToggle = (batchKey: string) => {
-    setSelectedBatches((prev) => ({ ...prev, [batchKey]: !(prev[batchKey] ?? true) }));
+    updateStep2("selectedBatches", { ...selectedBatches, [batchKey]: !(selectedBatches[batchKey] ?? true) });
     onDirty?.();
   };
 
   const handleMaterialScopeToggle = (materialCode: string) => {
-    setMaterialScopeSelected((prev) => ({ ...prev, [materialCode]: !prev[materialCode] }));
+    updateStep2("materialScopeSelected", { ...materialScopeSelected, [materialCode]: !materialScopeSelected[materialCode] });
     onDirty?.();
   };
   const handleMoqBreakToggle = (key: string, next: boolean) => {
-    setMoqBreak((prev) => ({ ...prev, [key]: next }));
+    updateStep2("moqBreak", { ...moqBreak, [key]: next });
     onDirty?.();
   };
   const handleSupplierInventoryChange = (materialCode: string, value: string) => {
-    setSupplierInventoryInputs((prev) => ({ ...prev, [materialCode]: value }));
+    updateStep2("supplierInventoryInputs", { ...supplierInventoryInputs, [materialCode]: value });
     onDirty?.();
   };
   const handleFeedstockChange = (materialCode: string, value: string) => {
-    setFeedstockInputs((prev) => ({ ...prev, [materialCode]: value }));
+    updateStep2("feedstockInputs", { ...feedstockInputs, [materialCode]: value });
     onDirty?.();
   };
   const handleCustomInputsSave = () => {
@@ -203,26 +244,26 @@ export function SimulationAssumptionsStep({
     setIsSavingCustomInputs(true);
     window.setTimeout(() => {
       setIsSavingCustomInputs(false);
-      setCustomInputsSaved(true);
+      updateStep2("customInputsSaved", true);
       onDirty?.();
       setOpenModal(null);
     }, CUSTOM_INPUTS_SAVE_DELAY_MS);
   };
 
-  const iutPossibleCount = IUT_TRANSFER_LANES.filter(
+  const iutPossibleCount = catalog.iutTransferLanes.filter(
     (lane) => iutLanes[`${lane.from}→${lane.to}`],
   ).length;
-  const iutTotalLanes = IUT_TRANSFER_LANES.length;
-  const materialScopeSelectedCount = MATERIAL_SCOPE_DATA.filter((material) => materialScopeSelected[material.materialCode]).length;
-  const materialScopeTotal = MATERIAL_SCOPE_DATA.length;
+  const iutTotalLanes = catalog.iutTransferLanes.length;
+  const materialScopeSelectedCount = catalog.materialScopeData.filter((material) => materialScopeSelected[material.materialCode]).length;
+  const materialScopeTotal = catalog.materialScopeData.length;
   // Counted per supplier, not per material — the tile summary reflects how many
   // individual material/supplier pairs can break MOQ.
   const moqSupplierKeys = useMemo(
     () =>
-      MOQ_BREAK_MATERIALS.flatMap((mat) =>
-        (MOQ_BREAK_SUPPLIERS[mat.code] ?? []).map((s) => moqSupplierKey(mat.code, s.name)),
+      catalog.moqBreakMaterials.flatMap((mat) =>
+        (catalog.moqBreakSuppliers[mat.code] ?? []).map((s) => moqSupplierKey(mat.code, s.name)),
       ),
-    [],
+    [catalog.moqBreakMaterials, catalog.moqBreakSuppliers],
   );
   const moqBreakCount = moqSupplierKeys.filter((key) => moqBreak[key]).length;
   const moqTotalSuppliers = moqSupplierKeys.length;
@@ -233,23 +274,26 @@ export function SimulationAssumptionsStep({
 
   // How many of the PO lines are currently included in the simulation.
   const openPoIncludedCount = useMemo(
-    () => OPEN_PO_LINES.filter((l) => poIncludedByLine[l.id]).length,
-    [poIncludedByLine],
+    () => catalog.openPoLines.filter((l) => poIncludedByLine[l.id]).length,
+    [catalog.openPoLines, poIncludedByLine],
   );
-  const openPoRmCount = useMemo(() => OPEN_PO_LINES.filter((l) => l.type === "RM").length, []);
-  const openPoPmCount = useMemo(() => OPEN_PO_LINES.filter((l) => l.type === "PM").length, []);
-  const openPoSubtitle = `${openPoIncludedCount} of ${OPEN_PO_LINES.length} included — ${openPoRmCount} RM · ${openPoPmCount} PM`;
+  const openPoRmCount = useMemo(() => catalog.openPoLines.filter((l) => l.type === "RM").length, [catalog.openPoLines]);
+  const openPoPmCount = useMemo(() => catalog.openPoLines.filter((l) => l.type === "PM").length, [catalog.openPoLines]);
+  const openPoSubtitle = `${openPoIncludedCount} of ${catalog.openPoLines.length} included — ${openPoRmCount} RM · ${openPoPmCount} PM`;
 
   // Surfaces the modal's delivery-date/ageing data on the tile itself: an overdue PO is the
   // most actionable thing to flag at a glance, so it takes priority over the nearest upcoming
   // delivery date whenever any line is past due.
   const openPoOverdueCount = useMemo(
-    () => OPEN_PO_LINES.filter((l) => daysPastDue(l.poDeliveryDate) != null).length,
-    [],
+    () => catalog.openPoLines.filter((l) => daysPastDue(l.poDeliveryDate) != null).length,
+    [catalog.openPoLines],
   );
   const openPoNearestDeliveryDate = useMemo(
-    () => OPEN_PO_LINES.reduce((nearest, l) => (l.poDeliveryDate < nearest ? l.poDeliveryDate : nearest), OPEN_PO_LINES[0].poDeliveryDate),
-    [],
+    () =>
+      catalog.openPoLines.length === 0
+        ? ""
+        : catalog.openPoLines.reduce((nearest, l) => (l.poDeliveryDate < nearest ? l.poDeliveryDate : nearest), catalog.openPoLines[0].poDeliveryDate),
+    [catalog.openPoLines],
   );
 
   const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -276,25 +320,22 @@ export function SimulationAssumptionsStep({
   const rmpmBomPendingStatus: RmpmBomPendingStatus | null =
     newCbuRow && (rmpmStatus === "contract_pending" || rmpmStatus === "po_creation_pending") ? rmpmStatus : null;
 
-  // New CBU is optional ("Old CBU required · New CBU optional" — see SelectCbuStep) — most
-  // scenarios never pick one. Customise Inputs still needs a CBU's BOM to seed from, so it
-  // falls back to the Old CBU whenever no New CBU is selected, instead of showing nothing.
-  const customInputsSourceRow = newCbuRow ?? oldCbuRow;
-  const customInputsBaseline = useMemo(
-    () => buildCustomScenarioBaseline(customInputsSourceRow),
-    [customInputsSourceRow],
-  );
-  // Seed the custom-overrides form with every plant from the baseline by default — the
-  // user can still remove/edit plants from there, but shouldn't have to click "Load all
-  // plants" themselves just to see the starting values. Skipped once the user has actually
-  // customised something, so it never clobbers their edits.
+  // Seed the custom-overrides form with every plant from the baseline the moment real baseline
+  // data becomes available — most CBUs have no curated baseline at all (see
+  // customOverridesUtils), so this usually only fires later, if the user switches to a New CBU
+  // that does. Skipped once the user has actually customised something, so it never clobbers
+  // their edits.
   useEffect(() => {
     if (customInputsBaseline.length === 0 || customPlants.length > 0 || customRows.length > 0) return;
     const seed = buildBaselineScenario(customInputsBaseline);
-    setCustomPlants(seed.plants);
-    setCustomRows(seed.rows);
-    setCustomProductionPlan(seed.productionPlan);
+    updateStep2("customPlants", seed.plants);
+    updateStep2("customRows", seed.rows);
+    updateStep2("customProductionPlan", seed.productionPlan);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customInputsBaseline, customPlants.length, customRows.length]);
+
+  const isLoadingAssumptions = assumptionsQuery.isLoading;
+  const isAssumptionsError = assumptionsQuery.isError;
 
   return (
     <StepSection
@@ -302,6 +343,18 @@ export function SimulationAssumptionsStep({
       title="Simulation Assumptions"
       subtitle="Configure assumptions before running scenarios."
     >
+      {isLoadingAssumptions ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-16">
+          <Loader2 size={20} className="animate-spin" style={{ color: C.blue }} />
+          <p className="text-sm" style={{ color: C.muted }}>Loading simulation assumptions…</p>
+        </div>
+      ) : isAssumptionsError ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-16">
+          <AlertTriangle size={20} style={{ color: C.danger }} />
+          <p className="text-sm" style={{ color: C.muted }}>Could not load simulation assumptions.</p>
+        </div>
+      ) : (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 items-stretch">
          <AssumptionTile
           icon={<ListChecks size={16} style={{ color: C.blue }} />}
@@ -312,7 +365,7 @@ export function SimulationAssumptionsStep({
           </span>}
           onClick={() => setOpenModal("materialScope")}
         />
-        
+
         <DateAssumptionTile
           value={networkTransitionDate}
           onChange={handleNetworkTransitionDate}
@@ -368,13 +421,13 @@ export function SimulationAssumptionsStep({
           <AssumptionTile
             icon={<Calendar size={16} style={{ color: C.blue }} />}
             title="RMPM connectivity date"
-            subtitle={RMPM_BOM_PENDING_TILE_LABEL[rmpmBomPendingStatus]}
+            subtitle={catalog.rmpmBomPendingTileLabel[rmpmBomPendingStatus]}
             summary={
               <span
                 className="px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap"
                 style={{ backgroundColor: C.warningBg, color: C.warningTextDark }}
               >
-                {RMPM_BOM_PENDING_LIES_WITH[rmpmBomPendingStatus]}
+                {catalog.rmpmBomPendingLiesWith[rmpmBomPendingStatus]}
               </span>
             }
             onClick={() => setOpenModal("rmpm")}
@@ -388,9 +441,9 @@ export function SimulationAssumptionsStep({
               <span
                 className="px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap"
                 style={{ backgroundColor: C.warningBg, color: C.warningTextDark }}
-                title={RMPM_CONNECTIVITY_STATUS_MESSAGE[rmpmStatus as Exclude<RmpmConnectivityStatus, "po_available">]}
+                title={catalog.rmpmConnectivityStatusMessage[rmpmStatus as Exclude<RmpmConnectivityStatus, "po_available">]}
               >
-                {RMPM_CONNECTIVITY_STATUS_PILL_LABEL[rmpmStatus as Exclude<RmpmConnectivityStatus, "po_available">]}
+                {catalog.rmpmConnectivityStatusPillLabel[rmpmStatus as Exclude<RmpmConnectivityStatus, "po_available">]}
               </span>
             }
             value={rmpmDate}
@@ -408,7 +461,7 @@ export function SimulationAssumptionsStep({
           />
         )}
 
-       
+
         <AssumptionTile
           icon={<ArrowLeftRight size={16} style={{ color: C.blue }} />}
           title="IUT feasibility"
@@ -479,7 +532,7 @@ export function SimulationAssumptionsStep({
               className="px-2 py-0.5 rounded-full text-[10px] font-bold"
               style={{ backgroundColor: C.bgBlue, color: C.blue }}
             >
-              {SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS.length} materials
+              {catalog.supplierInventoryFeedstockMaterials.length} materials
             </span>
           }
           onClick={() => setOpenModal("supplierInventory")}
@@ -496,6 +549,7 @@ export function SimulationAssumptionsStep({
           maxHeight="88vh"
         >
           <OpenPoAssumptionsContent
+            openPoLines={catalog.openPoLines}
             poIncludedByLine={poIncludedByLine}
             onSetLineIncluded={handleSetLineIncluded}
             onBulkSetIncluded={handleBulkSetIncluded}
@@ -520,14 +574,16 @@ export function SimulationAssumptionsStep({
         <Modal
           icon={<Calendar size={17} className="text-white" />}
           title={"RMPM connectivity date"}
-          subtitle={RMPM_BOM_PENDING_TILE_LABEL[rmpmBomPendingStatus]}
+          subtitle={catalog.rmpmBomPendingTileLabel[rmpmBomPendingStatus]}
           onClose={() => setOpenModal(null)}
           maxWidth="min(97vw, 1280px)"
           maxHeight="86vh"
         >
           <RmpmBomPendingContent
-            rows={RMPM_BOM_CONNECTIVITY_ROWS}
+            rows={catalog.rmpmBomConnectivityRows}
             status={rmpmBomPendingStatus}
+            rmpmBomPendingLiesWith={catalog.rmpmBomPendingLiesWith}
+            rmpmConnectivityStatusMessage={catalog.rmpmConnectivityStatusMessage}
           />
         </Modal>
       )}
@@ -542,6 +598,7 @@ export function SimulationAssumptionsStep({
           maxHeight="86vh"
         >
           <MaterialScopeContent
+            data={catalog.materialScopeData}
             selected={materialScopeSelected}
             onToggle={handleMaterialScopeToggle}
           />
@@ -558,6 +615,9 @@ export function SimulationAssumptionsStep({
           maxHeight="86vh"
         >
           <IutFeasibilityContent
+            iutTransferLanes={catalog.iutTransferLanes}
+            iutLaneRequirements={catalog.iutLaneRequirements}
+            materialBatchData={catalog.materialBatchData}
             iutLanes={iutLanes}
             contractLeadTimes={contractLeadTimes}
             onContractLeadTimeChange={handleContractLeadTimeChange}
@@ -580,6 +640,8 @@ export function SimulationAssumptionsStep({
           maxHeight="86vh"
         >
           <MoqBreakContent
+            moqBreakMaterials={catalog.moqBreakMaterials}
+            moqBreakSuppliers={catalog.moqBreakSuppliers}
             moqBreak={moqBreak}
             onToggleBreak={handleMoqBreakToggle}
           />
@@ -603,13 +665,13 @@ export function SimulationAssumptionsStep({
           ) : (
             <CustomOverridesForm
               rows={customRows}
-              onRowsChange={setCustomRows}
+              onRowsChange={(rows) => updateStep2("customRows", rows)}
               plants={customPlants}
-              onPlantsChange={setCustomPlants}
+              onPlantsChange={(plants) => updateStep2("customPlants", plants)}
               fgUnits={customFgUnits}
-              onFgUnitsChange={setCustomFgUnits}
+              onFgUnitsChange={(fgUnits) => updateStep2("customFgUnits", fgUnits)}
               productionPlan={customProductionPlan}
-              onProductionPlanChange={setCustomProductionPlan}
+              onProductionPlanChange={(plan) => updateStep2("customProductionPlan", plan)}
               baseline={customInputsBaseline}
               onRun={handleCustomInputsSave}
               computed={customInputsSaved}
@@ -632,12 +694,15 @@ export function SimulationAssumptionsStep({
           maxHeight="86vh"
         >
           <SupplierInventoryFeedstockContent
+            materials={catalog.supplierInventoryFeedstockMaterials}
             supplierInventory={supplierInventoryInputs}
             onSupplierInventoryChange={handleSupplierInventoryChange}
             feedstock={feedstockInputs}
             onFeedstockChange={handleFeedstockChange}
           />
         </Modal>
+      )}
+      </>
       )}
     </StepSection>
   );

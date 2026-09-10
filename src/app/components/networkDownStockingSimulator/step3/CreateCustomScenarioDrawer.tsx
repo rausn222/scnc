@@ -5,12 +5,14 @@ import { C } from "../../sciDetails/constants";
 import { ScenarioDetailTable } from "./ScenarioDetailTable";
 import { buildScenarioViewModel, buildSnapshotFromViewModel } from "./scenarioDetailModel";
 import type { ScenarioDetailSnapshot, ScenarioEditState } from "./ScenarioDetailPrimitives";
+import type { ScenarioCatalog } from "../../../api/networkDownStockingSimulator/step3Api";
 
 /** How long the "Save Scenario" button spends in its loading state — mirrors the
     "Generate Scenario" simulate-a-real-run delay in ScenarioComparisonStep. */
 const SAVE_SCENARIO_DELAY_MS = 700;
 
 export function CreateCustomScenarioDrawer({
+  catalog,
   editState,
   onEditStateChange,
   onClose,
@@ -19,6 +21,7 @@ export function CreateCustomScenarioDrawer({
   moqSuppliers,
   onMoqSupplier,
 }: {
+  catalog: ScenarioCatalog;
   editState: ScenarioEditState;
   onEditStateChange: (patch: Partial<ScenarioEditState>) => void;
   onClose: () => void;
@@ -54,7 +57,7 @@ export function CreateCustomScenarioDrawer({
     setIsSaving(true);
     window.setTimeout(() => {
       setIsSaving(false);
-      const viewModel = buildScenarioViewModel("custom-new", selTransfer, moqSuppliers, editState);
+      const viewModel = buildScenarioViewModel(catalog, "custom-new", selTransfer, moqSuppliers, editState);
       if (viewModel) onSave(buildSnapshotFromViewModel(viewModel));
     }, SAVE_SCENARIO_DELAY_MS);
   };
@@ -93,6 +96,7 @@ export function CreateCustomScenarioDrawer({
     >
       <div className="p-4">
         <ScenarioDetailTable
+          catalog={catalog}
           scenarioId="custom-new"
           isCustomising={true}
           editState={editState}

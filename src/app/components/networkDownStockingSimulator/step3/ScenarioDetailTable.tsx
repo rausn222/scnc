@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatIndianNumber } from "../../sciDetails/utils";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
 import {
@@ -23,31 +23,22 @@ import {
   type ScenarioEditState,
 } from "./ScenarioDetailPrimitives";
 import { buildScenarioViewModel } from "./scenarioDetailModel";
-import { C, IUT_TRANSFER_OPTIONS, MOQ_PLANT_OPTIONS } from "../../sciDetails/constants";
+import { C } from "../../sciDetails/constants";
+import type { ScenarioCatalog } from "../../../api/networkDownStockingSimulator/step3Api";
 
 const PLANT_OPTIONS = ["U535", "UTR"];
-const MATERIAL_OPTIONS = [...new Set([
-  ...IUT_TRANSFER_OPTIONS.map((option) => option.material),
-  ...MOQ_PLANT_OPTIONS.map((option) => option.material),
-])];
-const MATERIAL_SELECT_OPTIONS = MATERIAL_OPTIONS.map((material) => {
-  const [type, ...codeParts] = material.split(" ");
-  const code = codeParts.join(" ");
-  return {
-    value: material,
-    type,
-    code,
-    label: `${type}-${code}-${materialDescription(type, code)}`,
-  };
-});
+
+type MaterialSelectOption = { value: string; type: string; code: string; label: string };
 
 function MaterialSelect({
   type,
   code,
+  options,
   onChange,
 }: {
   type: string;
   code: string;
+  options: MaterialSelectOption[];
   onChange: (material: { matType: string; matCode: string }) => void;
 }) {
   const value = type && code ? `${type} ${code}` : "";
@@ -65,7 +56,7 @@ function MaterialSelect({
         style={{ ...editInputStyle, width: 280 }}
       >
         <option value="">Material code &amp; description</option>
-        {MATERIAL_SELECT_OPTIONS.map((material) => (
+        {options.map((material) => (
           <option key={material.value} value={material.value}>
             {material.label}
           </option>
@@ -74,7 +65,6 @@ function MaterialSelect({
     </DropdownField>
   );
 }
-const SUPPLIER_OPTIONS = [...new Set(MOQ_PLANT_OPTIONS.flatMap((option) => option.suppliers.map((supplier) => supplier.name)))];
 
 const DEFAULT_ROWS_PER_PAGE = 10;
 
@@ -99,6 +89,7 @@ function currentDateInputValue(): string {
  * edits/deletes upward via `onEditStateChange`.
  */
 export function ScenarioDetailTable({
+  catalog,
   scenarioId,
   selTransfer,
   moqSuppliers,
@@ -107,6 +98,7 @@ export function ScenarioDetailTable({
   editState,
   onEditStateChange,
 }: {
+  catalog: ScenarioCatalog;
   scenarioId: string;
   selTransfer: string;
   moqSuppliers: Record<string, string>;
@@ -115,7 +107,27 @@ export function ScenarioDetailTable({
   editState: ScenarioEditState;
   onEditStateChange: (patch: Partial<ScenarioEditState>) => void;
 }) {
-  const vm = buildScenarioViewModel(scenarioId, selTransfer, moqSuppliers, editState);
+  const materialSelectOptions = useMemo<MaterialSelectOption[]>(() => {
+    const materials = [...new Set([
+      ...catalog.iutTransferOptions.map((option) => option.material),
+      ...catalog.moqPlantOptions.map((option) => option.material),
+    ])];
+    return materials.map((material) => {
+      const [type, ...codeParts] = material.split(" ");
+      const code = codeParts.join(" ");
+      return {
+        value: material,
+        type,
+        code,
+        label: `${type}-${code}-${materialDescription(type, code)}`,
+      };
+    });
+  }, [catalog.iutTransferOptions, catalog.moqPlantOptions]);
+  const supplierOptions = useMemo(
+    () => [...new Set(catalog.moqPlantOptions.flatMap((option) => option.suppliers.map((supplier) => supplier.name)))],
+    [catalog.moqPlantOptions],
+  );
+  const vm = buildScenarioViewModel(catalog, scenarioId, selTransfer, moqSuppliers, editState);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const [iutCollapsed, setIutCollapsed] = useState(false);
   const [procurementCollapsed, setProcurementCollapsed] = useState(false);
@@ -360,6 +372,7 @@ export function ScenarioDetailTable({
                             <MaterialSelect
                               type={row.matType}
                               code={row.matCode}
+                              options={materialSelectOptions}
                               onChange={(material) => updateAddedIutRow(row.id, material)}
                             />
                           ) : (
@@ -481,6 +494,7 @@ export function ScenarioDetailTable({
                             <MaterialSelect
                               type={row.matType}
                               code={row.matCode}
+                              options={materialSelectOptions}
                               onChange={(material) => updateAddedProcurementRow(row.id, material)}
                             />
                           ) : (
@@ -498,7 +512,7 @@ export function ScenarioDetailTable({
                     <Td>
                       {row.custom ? (
                         isCustomising ? (
-                          isCreateMode ? <SelectCell value={row.supplierName} onChange={(v) => updateAddedProcurementRow(row.id, { supplierName: v })} options={SUPPLIER_OPTIONS} width={220} placeholder="Supplier name" /> : <EditableCell value={row.supplierName} onChange={(v) => updateAddedProcurementRow(row.id, { supplierName: v })} width={180} placeholder="Supplier name" />
+                          isCreateMode ? <SelectCell value={row.supplierName} onChange={(v) => updateAddedProcurementRow(row.id, { supplierName: v })} options={supplierOptions} width={220} placeholder="Supplier name" /> : <EditableCell value={row.supplierName} onChange={(v) => updateAddedProcurementRow(row.id, { supplierName: v })} width={180} placeholder="Supplier name" />
                         ) : (
                           <span className="font-semibold" style={{ color: C.blue }}>{row.supplierName || "—"}</span>
                         )

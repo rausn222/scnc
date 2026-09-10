@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProductionPlanModal } from "../../ProductionPlanModal";
-import { C, PLANT_BREAKDOWN_BASE } from "../../sciDetails/constants";
+import { C } from "../../sciDetails/constants";
+import type { ScenarioCatalog } from "../../../api/networkDownStockingSimulator/step3Api";
 import type { IUTOption, MOQPlantOption } from "../../sciDetails/types";
 import { computeTransitionRows, formatIndianNumber, getActivePlantRoles } from "../../sciDetails/utils";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
@@ -37,6 +38,7 @@ import {
 const DEFAULT_ROWS_PER_PAGE = 10;
 
 export function CustomScenarioDetailView({
+  catalog,
   snapshot,
   isCustomising = false,
   editState,
@@ -44,6 +46,7 @@ export function CustomScenarioDetailView({
   cbuCode,
   cbuDescription,
 }: {
+  catalog: ScenarioCatalog;
   snapshot: ScenarioDetailSnapshot;
   isCustomising?: boolean;
   editState?: CustomSnapshotEditState;
@@ -125,7 +128,7 @@ export function CustomScenarioDetailView({
   const transposedColumns = useMemo(() => {
     const cols: TransposedBreakdownColumn[] = [];
     for (const { code, roles } of breakdownActivePlantRoles) {
-      const plantMeta = PLANT_BREAKDOWN_BASE[code];
+      const plantMeta = catalog.plantBreakdownBase[code];
       if (!plantMeta) continue;
       const rowsByState = computeTransitionRows(code, roles, "iut-moq", breakdownTransfer, breakdownMoq, {});
       // Same "has real data" filter used by the other Component Breakdown by Plant views —
@@ -577,7 +580,7 @@ export function CustomScenarioDetailView({
           plantCode={productionPlanPlant}
           cbuCode={cbuCode}
           cbuDescription={cbuDescription}
-          totalProduction={PLANT_BREAKDOWN_BASE[productionPlanPlant]?.totalProductionPlanQty ?? 0}
+          totalProduction={catalog.plantBreakdownBase[productionPlanPlant]?.totalProductionPlanQty ?? 0}
           onClose={() => setProductionPlanPlant(null)}
         />
       )}

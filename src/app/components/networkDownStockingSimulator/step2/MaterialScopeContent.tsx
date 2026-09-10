@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
+import type { MaterialScopeRow } from "../../../api/networkDownStockingSimulator/step2Api";
 
 // Local one-off colors — no exact match in the shared C palette.
 const TABLE_HEADER_BG = "#0b3b91";
@@ -8,88 +9,24 @@ const CHECKBOX_ACCENT_COLOR = "#1769c2";
 
 const DEFAULT_ROWS_PER_PAGE = 10;
 
-type MaterialScopeRow = {
-    materialType: "PM" | "RM";
-    materialCode: string;
-    description: string;
-    oldCbu: string;
-    contributionType: string;
-    newCbuAssociated: string;
-};
-export const MATERIAL_SCOPE_DATA: MaterialScopeRow[] = [
-    {
-        oldCbu: "VAFA1R3",
-        materialType: "PM",
-        materialCode: "11477867",
-        description: "VAS ALOE FRESH 100ML FENOMENO CAP",
-        contributionType: "Unique",
-        newCbuAssociated: "VCBL1R3",
-    },
-    {
-        oldCbu: "VAFA1R0",
-        materialType: "PM",
-        materialCode: "11477877",
-        description: "VAS ALOE FRESH 10ML FENOMENO CAP",
-        contributionType: "High Contribution",
-        newCbuAssociated: ""
-    },
-    {
-        oldCbu: "VCBL1R0",
-        materialType: "PM",
-        materialCode: "11477887",
-        description: "VAS ALOE FRESH 150ML FENOMENO CAP",
-        contributionType: "High Contribution",
-        newCbuAssociated: ""
-    },
-    {
-        oldCbu: "VAFA1R3",
-        materialType: "PM",
-        materialCode: "65284824",
-        description: "85ml Bottle Cap & Shrink Sleeve PM",
-        contributionType: "Unique",
-        newCbuAssociated: "VCBL1R3",
-    },
-    {
-        oldCbu: "VCBL1R0",
-        materialType: "PM",
-        materialCode: "65284724",
-        description: "85ml Bottle Cap & Shrink Sleeve1 PM",
-        contributionType: "High Contribution",
-        newCbuAssociated: "VCBL1R3",
-    },
-    {
-        oldCbu: "VCBL1R0",
-        materialType: "RM",
-        materialCode: "11100345",
-        description: "VAS ALOE FRESH 50ML",
-        contributionType: "Unique",
-        newCbuAssociated: "VAFA2R3"
-    },
-    {
-        oldCbu: "VAFA1R3",
-        materialType: "RM",
-        materialCode: "11100335",
-        description: "VAS ALOE FRESH 10ML",
-        contributionType: "Unique",
-        newCbuAssociated: "VCBL1R3",
-    },
-];
 export default function MaterialScopeContent({
+    data,
     selected,
     onToggle,
 }: {
+    data: MaterialScopeRow[];
     selected: Record<string, boolean>;
     onToggle: (materialCode: string) => void;
 }) {
     const groupedRows = useMemo(
         () =>
-            MATERIAL_SCOPE_DATA.reduce<Array<{ oldCbu: string; rows: MaterialScopeRow[] }>>((groups, row) => {
+            data.reduce<Array<{ oldCbu: string; rows: MaterialScopeRow[] }>>((groups, row) => {
                 const group = groups.find((item) => item.oldCbu === row.oldCbu);
                 if (group) group.rows.push(row);
                 else groups.push({ oldCbu: row.oldCbu, rows: [row] });
                 return groups;
             }, []),
-        [],
+        [data],
     );
 
     // Flatten to one ordered row list (each entry keeps a reference back to its

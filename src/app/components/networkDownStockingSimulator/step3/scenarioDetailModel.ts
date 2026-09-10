@@ -1,13 +1,7 @@
 import type { IUTOption, PlantRole, ScenarioRow } from "../../sciDetails/types";
-import {
-  IUT_TRANSFER_OPTIONS,
-  MOQ_PLANT_OPTIONS,
-  MOQ_PLANT_OPTIONS_BREAK,
-  PLANT_BREAKDOWN_BASE,
-  SCENARIOS,
-} from "../../sciDetails/constants";
 import { computeAfterQtyAndDate } from "../../sciDetails/utils";
 import { autoIutCost, autoProcurementValues, splitMaterial, type AddedIutRow, type ScenarioDetailSnapshot, type ScenarioEditState } from "./ScenarioDetailPrimitives";
+import type { ScenarioCatalog } from "../../../api/networkDownStockingSimulator/step3Api";
 
 export type ScenarioProcurementRowVM = {
   id: string;
@@ -50,6 +44,7 @@ export type ScenarioViewModel = {
  */
 
 export function buildScenarioViewModel(
+  catalog: ScenarioCatalog,
   scenarioId: string,
   selTransfer: string,
   moqSuppliers: Record<string, string>,
@@ -137,7 +132,7 @@ if (scenarioId === "custom-new") {
       ),
   };
 }
-  const scenario = SCENARIOS.find((s) => s.id === scenarioId);
+  const scenario = catalog.scenarios.find((s) => s.id === scenarioId);
   if (!scenario) return null;
 
   const iutApplicable = scenarioId === "iut" || scenarioId === "iut-moq" || scenarioId === "iut-moq-break";
@@ -145,18 +140,18 @@ if (scenarioId === "custom-new") {
   const isBreakMoq = scenarioId === "iut-moq-break";
   const iutActive = iutApplicable && !editState.iutRemoved;
 
-  const transferOptions = IUT_TRANSFER_OPTIONS.slice(0, 2);
+  const transferOptions = catalog.iutTransferOptions.slice(0, 2);
   const baseOption = transferOptions.find((o) => o.id === selTransfer) ?? transferOptions.find((o) => o.isBest) ?? transferOptions[0];
   const option: IUTOption = { ...baseOption, ...editState.optionOverride };
   const iutMaterial = splitMaterial(option.material);
 
-  const moqPlantData = isBreakMoq ? MOQ_PLANT_OPTIONS_BREAK : MOQ_PLANT_OPTIONS;
+  const moqPlantData = isBreakMoq ? catalog.moqPlantOptionsBreak : catalog.moqPlantOptions;
   const effMoqPlantData = moqPlantData
     .filter((p) => !editState.removedProcurementIds.includes(p.id))
     .map((p) => ({ ...p, orderQty: editState.moqOrderQtyOverrides[p.id] ?? p.orderQty }));
 
   const computeFg = (plantCode: string): number => {
-    const base = PLANT_BREAKDOWN_BASE[plantCode];
+    const base = catalog.plantBreakdownBase[plantCode];
     if (!base) return 0;
     const roles: PlantRole[] = [];
     if (iutActive && option.routeFrom === plantCode) roles.push("source");
@@ -176,7 +171,7 @@ if (scenarioId === "custom-new") {
     return qty;
   };
 
-  const totalFg = Object.keys(PLANT_BREAKDOWN_BASE).reduce((sum, code) => sum + computeFg(code), 0);
+  const totalFg = Object.keys(catalog.plantBreakdownBase).reduce((sum, code) => sum + computeFg(code), 0);
 
   const catalogProcurementRows: ScenarioProcurementRowVM[] = procurementApplicable
     ? effMoqPlantData.map((plant) => {

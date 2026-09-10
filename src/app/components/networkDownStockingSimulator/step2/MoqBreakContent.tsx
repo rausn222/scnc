@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { ComponentCodeWithDesc } from "../../sciDetails/ComponentCodeWithDesc";
-import { C, MOQ_BREAK_MATERIALS, MOQ_BREAK_SUPPLIERS, moqSupplierKey } from "../../sciDetails/constants";
+import { C, moqSupplierKey } from "../../sciDetails/constants";
 import { occurrenceConfidenceMeta } from "../../sciDetails/utils";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
+import type { SimulationAssumptionsCatalog } from "../../../api/networkDownStockingSimulator/step2Api";
 
 const DEFAULT_ROWS_PER_PAGE = 10;
 
@@ -12,14 +13,18 @@ const DEFAULT_ROWS_PER_PAGE = 10;
  * MOQ-break feasibility can differ supplier to supplier within a material.
  */
 export function MoqBreakContent({
+  moqBreakMaterials,
+  moqBreakSuppliers,
   moqBreak,
   onToggleBreak,
 }: {
+  moqBreakMaterials: SimulationAssumptionsCatalog["moqBreakMaterials"];
+  moqBreakSuppliers: SimulationAssumptionsCatalog["moqBreakSuppliers"];
   /** Keyed by `moqSupplierKey(materialCode, supplierName)`. */
   moqBreak: Record<string, boolean>;
   onToggleBreak: (key: string, next: boolean) => void;
 }) {
-  const materialsWithSuppliers = MOQ_BREAK_MATERIALS.filter((mat) => (MOQ_BREAK_SUPPLIERS[mat.code] ?? []).length > 0);
+  const materialsWithSuppliers = moqBreakMaterials.filter((mat) => (moqBreakSuppliers[mat.code] ?? []).length > 0);
 
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
@@ -50,7 +55,7 @@ export function MoqBreakContent({
           </thead>
           <tbody>
             {pagedMaterials.map((mat) => {
-              const suppliers = MOQ_BREAK_SUPPLIERS[mat.code] ?? [];
+              const suppliers = moqBreakSuppliers[mat.code] ?? [];
 
               return (
                 <tr key={mat.code} style={{ borderTop: `1px solid ${C.bgSlate}` }}>

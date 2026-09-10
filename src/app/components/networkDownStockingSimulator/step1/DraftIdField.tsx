@@ -9,6 +9,8 @@ import React, {
 import { createPortal } from "react-dom";
 import { ChevronDown, Search, X } from "lucide-react";
 import { C } from "../../sciDetails/constants";
+import { useDraftListQuery } from "../../../queries/networkDownStockingSimulator";
+import type { DraftRecord } from "../../../api/networkDownStockingSimulator";
 
 // Panel chrome/tints with no matching C.* token — kept file-local so parallel
 // edits to constants.ts don't conflict (see step1 refactor notes).
@@ -21,33 +23,7 @@ const FONT_FAMILY = "'Plus Jakarta Sans', sans-serif";
 // Panel is portaled to document.body, so it must out-rank all page content.
 const DROPDOWN_PANEL_Z_INDEX = 9999;
 
-export interface DraftRecord {
-    id: string;
-    projectName: string;
-    oldSrNos: number[];
-    newSrNos: number[];
-}
-
-const DUMMY_DRAFTS: DraftRecord[] = [
-    {
-        id: "DRF-2026-00001",
-        projectName: "Network Transition Project",
-        oldSrNos: [1],
-        newSrNos: [2],
-    },
-    {
-        id: " DRF-2026-00002",
-        projectName: "CBU Changeover Simulation",
-        oldSrNos: [2, 3],
-        newSrNos: [3],
-    },
-    {
-        id: " DRF-2026-00003",
-        projectName: "Legacy CBU Replacement",
-        oldSrNos: [4],
-        newSrNos: [],
-    },
-];
+export type { DraftRecord };
 
 interface DraftIdFieldProps {
     value: string;
@@ -72,24 +48,26 @@ export function DraftIdField({
     const containerRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
 
+    const { data: drafts = [] } = useDraftListQuery();
+
     const selectedDraft = useMemo(
-        () => DUMMY_DRAFTS.find((draft) => draft.id === value) ?? null,
-        [value],
+        () => drafts.find((draft) => draft.id === value) ?? null,
+        [drafts, value],
     );
 
     const filteredDrafts = useMemo(() => {
         const query = search.trim().toLowerCase();
 
         if (!query) {
-            return DUMMY_DRAFTS;
+            return drafts;
         }
 
-        return DUMMY_DRAFTS.filter(
+        return drafts.filter(
             (draft) =>
                 draft.id.toLowerCase().includes(query) ||
                 draft.projectName.toLowerCase().includes(query),
         );
-    }, [search]);
+    }, [drafts, search]);
 
     const updatePanelPosition = useCallback(() => {
         if (!buttonRef.current) {

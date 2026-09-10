@@ -6,6 +6,9 @@ import { ProjectNameField } from "./ProjectNameField";
 import { CreateProjectModal } from "../../projectDetails/CreateProjectModal";
 import type { NewProjectRecord } from "../../projectDetails/types";
 import { DraftIdField, DraftRecord } from "./DraftIdField";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { setSelectedDraftId } from "../../../store/slices/sciDetailSlice";
+import { useCreateProjectMutation } from "../../../queries/networkDownStockingSimulator";
 
 /**
  * Step 1 of the Network Down Stocking Agent flow — Old CBU, New CBU and
@@ -34,29 +37,38 @@ export function SelectCbuStep({
   onProjectNameChange: (name: string) => void;
   onProjectNameClear: () => void;
 }) {
+  const dispatch = useAppDispatch();
   const [createdProjectNames, setCreatedProjectNames] = useState<string[]>([]);
   const [showCreateProject, setShowCreateProject] = useState(false);
-  const [selectedDraftId, setSelectedDraftId] = useState("");
+  const selectedDraftId = useAppSelector((s) => s.sciDetail.selectedDraftId);
   const isMultiOldCbuSelected = oldSrNos.length > 1;
+  const createProjectMutation = useCreateProjectMutation();
 
   const handleProjectsCreated = (records: NewProjectRecord[]) => {
-    const names = records.map((r) => r.name).filter((n) => n.trim() !== "");
-    if (names.length === 0) return;
-    setCreatedProjectNames((prev) => [...names, ...prev]);
-    onProjectNameChange(names[0]);
-    setShowCreateProject(false);
+    createProjectMutation.mutate(
+      { records },
+      {
+        onSuccess: ({ records: created }) => {
+          const names = created.map((r) => r.name).filter((n) => n.trim() !== "");
+          if (names.length === 0) return;
+          setCreatedProjectNames((prev) => [...names, ...prev]);
+          onProjectNameChange(names[0]);
+          setShowCreateProject(false);
+        },
+      }
+    );
   };
   const handleDraftChange = (
     draft: DraftRecord | null
   ) => {
     if (!draft) {
-      setSelectedDraftId("");
+      dispatch(setSelectedDraftId(""));
       onOldCbuChange([]);
       onNewCbuChange([])
       onProjectNameClear();
       return;
     }
-    setSelectedDraftId(draft.id);
+    dispatch(setSelectedDraftId(draft.id));
     onOldCbuChange(draft.oldSrNos);
     onNewCbuChange(draft.newSrNos);
     onProjectNameChange(draft.projectName);

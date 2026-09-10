@@ -3,6 +3,41 @@ import {
   IUT_TRANSFER_OPTIONS,
   MOQ_PLANT_OPTIONS,
 } from "../../components/sciDetails/constants";
+import type { CustomOverrideRow, PlantGroup, ScenarioRow } from "../../components/sciDetails/types";
+import type { ScenarioDetailSnapshot } from "../../components/networkDownStockingSimulator/step3/ScenarioDetailPrimitives";
+
+/** Step 3's saved custom scenarios — the "Create New Scenario" drawer's output. Kept in the
+ * store (not component state) for the same survive-a-remount reason as everything else here. */
+export type SciDetailCustomScenarios = ScenarioRow[];
+export type SciDetailCustomScenarioSnapshots = Record<string, ScenarioDetailSnapshot>;
+
+/** Every Step 2 (Simulation Assumptions) input the planner can set for the current CBU —
+ * lives in the store (not component state) so it survives leaving the Network Down Stocking
+ * Simulator page and coming back, instead of resetting on remount like plain local state would.
+ * `null` until `initStep2` seeds it with CBU-derived defaults on first render for this CBU. */
+export interface SciDetailStep2State {
+  networkTransitionDate: string;
+  poIncludedByLine: Record<string, boolean>;
+  rmpmDate: string;
+  rmpmManualDate: string;
+  moqBreak: Record<string, boolean>;
+  batchThresholds: Record<string, string>;
+  selectedBatches: Record<string, boolean>;
+  iutLanes: Record<string, boolean>;
+  contractLeadTimes: Record<string, string>;
+  materialScopeSelected: Record<string, boolean>;
+  customPlants: PlantGroup[];
+  customRows: CustomOverrideRow[];
+  customFgUnits: Record<string, string>;
+  customProductionPlan: Record<string, string>;
+  customInputsSaved: boolean;
+  supplierInventoryInputs: Record<string, string>;
+  feedstockInputs: Record<string, string>;
+}
+
+type Step2FieldPatch = {
+  [K in keyof SciDetailStep2State]: { key: K; value: SciDetailStep2State[K] };
+}[keyof SciDetailStep2State];
 
 export interface SciDetailState {
   newCbuSrNo: number | null;
@@ -19,6 +54,21 @@ export interface SciDetailState {
   /** The scenario formally Accepted (not just selected/highlighted) — drives
    * the "Accepted · View Details" state on return from Actions & Monitoring. */
   finalAcceptedId: string | null;
+  /** Step 1's Old/New CBU multi-selects — kept in the store for the same reason as everything
+   * else here: the page fully remounts on any nav away and back, and plain component state
+   * can't survive that. */
+  selectedOldSrNos: number[];
+  selectedNewSrNos: number[];
+  selectedDraftId: string;
+  step2: SciDetailStep2State | null;
+  /** Step 3's saved custom scenarios (via "Create New Scenario"), and their frozen
+   * "More Details" breakdowns keyed by scenario id. */
+  customScenarios: SciDetailCustomScenarios;
+  customScenarioSnapshots: SciDetailCustomScenarioSnapshots;
+  /** The (Old CBU) srNo all of the above state currently belongs to — lets the page tell a
+   * genuine CBU switch (reset everything) apart from simply revisiting the same CBU (keep
+   * showing whatever was last entered), regardless of which link brought the user back. */
+  activeSrNo: number | null;
 }
 
 const DEFAULT_SEL_TRANSFER =
@@ -37,6 +87,13 @@ const initialState: SciDetailState = {
   moqSuppliers: DEFAULT_MOQ_SUPPLIERS,
   scenariosGenerated: false,
   finalAcceptedId: null,
+  selectedOldSrNos: [],
+  selectedNewSrNos: [],
+  selectedDraftId: "",
+  step2: null,
+  customScenarios: [],
+  customScenarioSnapshots: {},
+  activeSrNo: null,
 };
 
 const sciDetailSlice = createSlice({
@@ -80,13 +137,55 @@ const sciDetailSlice = createSlice({
     setFinalAcceptedId(state, action: PayloadAction<string | null>) {
       state.finalAcceptedId = action.payload;
     },
-    resetOnCbuChange(state) {
+    setSelectedOldSrNos(state, action: PayloadAction<number[]>) {
+      state.selectedOldSrNos = action.payload;
+      state.hasChanges = true;
+    },
+    setSelectedNewSrNos(state, action: PayloadAction<number[]>) {
+      state.selectedNewSrNos = action.payload;
+      state.hasChanges = true;
+    },
+    setSelectedDraftId(state, action: PayloadAction<string>) {
+      state.selectedDraftId = action.payload;
+      state.hasChanges = true;
+    },
+    /** Seeds Step 2 with its CBU-derived defaults — only dispatched once per CBU, when
+     * `step2` is still null (see SimulationAssumptionsStep). */
+    initStep2(state, action: PayloadAction<SciDetailStep2State>) {
+      state.step2 = action.payload;
+    },
+    setStep2Field(state, action: PayloadAction<Step2FieldPatch>) {
+      if (!state.step2) return;
+      const { key, value } = action.payload;
+      (state.step2 as Record<string, unknown>)[key] = value;
+      state.hasChanges = true;
+    },
+    setCustomScenarios(state, action: PayloadAction<SciDetailCustomScenarios>) {
+      state.customScenarios = action.payload;
+      state.hasChanges = true;
+    },
+    setCustomScenarioSnapshots(state, action: PayloadAction<SciDetailCustomScenarioSnapshots>) {
+      state.customScenarioSnapshots = action.payload;
+      state.hasChanges = true;
+    },
+    /** Fires whenever the active (Old CBU) srNo actually changes — a genuine CBU switch, whether
+     * that came from picking a different CBU in Step 1 or arriving fresh with a different srNo
+     * from National Dashboard/Sidebar. Revisiting the *same* CBU (from any entry point) should
+     * never hit this, so everything entered for it stays visible — see NetworkDownStockingSimulator. */
+    resetOnCbuChange(state, action: PayloadAction<{ srNo: number | null }>) {
+      state.activeSrNo = action.payload.srNo;
       state.newCbuSrNo = null;
       state.acceptedId = null;
       state.hasChanges = false;
       state.lastSavedAt = null;
       state.scenariosGenerated = false;
       state.finalAcceptedId = null;
+      state.selectedOldSrNos = action.payload.srNo != null ? [action.payload.srNo] : [];
+      state.selectedNewSrNos = [];
+      state.selectedDraftId = "";
+      state.step2 = null;
+      state.customScenarios = [];
+      state.customScenarioSnapshots = {};
     },
   },
 });
@@ -101,6 +200,13 @@ export const {
   saveDraft,
   setScenariosGenerated,
   setFinalAcceptedId,
+  setSelectedOldSrNos,
+  setSelectedNewSrNos,
+  setSelectedDraftId,
+  initStep2,
+  setStep2Field,
+  setCustomScenarios,
+  setCustomScenarioSnapshots,
   resetOnCbuChange,
 } = sciDetailSlice.actions;
 

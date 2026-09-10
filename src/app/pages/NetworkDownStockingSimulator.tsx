@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, Clock, Save, Loader2, AlertTriangle } from "lucide-react";
 import { useNav } from "../App";
@@ -9,15 +9,16 @@ import { SelectCbuPlaceholder } from "../components/networkDownStockingSimulator
 import { SimulationAssumptionsStep } from "../components/networkDownStockingSimulator/step2/SimulationAssumptionsStep";
 import { ScenarioComparisonStep } from "../components/networkDownStockingSimulator/step3/ScenarioComparisonStep";
 import { useCbuDetailQuery } from "../queries/cbuQueries";
+import { useSaveDraftMutation } from "../queries/networkDownStockingSimulator";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { markDirty as markDirtyAction, resetOnCbuChange, saveDraft, setFinalAcceptedId, setMoqSupplier, setNewCbuSrNo, setProjectName, setScenariosGenerated, setSelTransfer, toggleAccepted,} from "../store/slices/sciDetailSlice";
+import { markDirty as markDirtyAction, resetOnCbuChange, saveDraft, setFinalAcceptedId, setMoqSupplier, setNewCbuSrNo, setProjectName, setScenariosGenerated, setSelTransfer, setSelectedNewSrNos, setSelectedOldSrNos, toggleAccepted,} from "../store/slices/sciDetailSlice";
 
 interface Props {
   srNo?: number;
-  /** True only when arriving back from Actions & Monitoring (via the "from" nav target
-   * ScenarioComparisonStep builds) — the in-progress simulation should survive that round
-   * trip. A fresh entry from the National Dashboard or Sidebar omits this, so Step 3 starts
-   * collapsed behind the "Generate Scenario" button instead of showing stale results. */
+  /** No longer drives the reset decision — see the `activeSrNo` comparison below, which
+   * preserves state for the same CBU regardless of entry point. Still accepted for the
+   * "from" nav target ScenarioComparisonStep/viewDetails builds when returning from
+   * Actions & Monitoring, kept for that nav contract. */
   preserveState?: boolean;
 }
 
@@ -32,13 +33,10 @@ const SAVE_DRAFT_TOAST = {
   description: "Your simulation progress has been saved.",
   duration: 3000,
 };
-/** Mirrors the "Generate Scenario" simulated-run delay so Save Draft reads as a real save. */
-const SAVE_DRAFT_DELAY_MS = 500;
-
 const SAVED_TIME_LOCALE = "en-IN";
 const SAVED_TIME_FORMAT: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit" };
 
-export default function NetworkDownStockingSimulator({ srNo, preserveState }: Readonly<Props>) {
+export default function NetworkDownStockingSimulator({ srNo }: Readonly<Props>) {
   const { navigate } = useNav();
   const dispatch = useAppDispatch();
 
@@ -78,45 +76,59 @@ export default function NetworkDownStockingSimulator({ srNo, preserveState }: Re
   // actually drives Step 2/3 at a time (the "primary") — that's the nav srNo
   // for Old CBU and newCbuSrNo (redux) for New CBU — but the page no longer
   // remounts when the primary changes (see App.tsx's pageKey), so these sets
-  // persist across selections instead of resetting on every switch.
-  const [selectedOldSrNos, setSelectedOldSrNos] = useState<number[]>(() => (srNo != null ? [srNo] : []));
-  const [selectedNewSrNos, setSelectedNewSrNos] = useState<number[]>(() => (newCbuSrNo != null ? [newCbuSrNo] : []));
+  // persist across selections instead of resetting on every switch. Backed by
+  // redux (not component state) so they also survive a genuine remount —
+  // e.g. leaving the page entirely and coming back to the same CBU.
+  const selectedOldSrNos = useAppSelector((s) => s.sciDetail.selectedOldSrNos);
+  const selectedNewSrNos = useAppSelector((s) => s.sciDetail.selectedNewSrNos);
+  const activeSrNo = useAppSelector((s) => s.sciDetail.activeSrNo);
 
   // Keeps the multi-select set in sync when the primary CBU changes from
   // outside the dropdown itself (e.g. arriving here with a srNo already set).
   useEffect(() => {
-    if (srNo != null) setSelectedOldSrNos((prev) => (prev.includes(srNo) ? prev : [...prev, srNo]));
-  }, [srNo]);
-  useEffect(() => {
-    if (newCbuSrNo != null) setSelectedNewSrNos((prev) => (prev.includes(newCbuSrNo) ? prev : [...prev, newCbuSrNo]));
-  }, [newCbuSrNo]);
-
-  // Each old-CBU selection should start the simulation from a clean slate —
-  // the shared IUT/MOQ selections (selTransfer/moqSuppliers) intentionally
-  // persist across CBU changes, matching the page's previous behaviour.
-  // Skipped on this component's very first mount only when preserveState is
-  // set: leaving for Actions & Monitoring and coming back remounts this page
-  // fresh with the same srNo, and that return trip should restore the
-  // in-progress simulation (accepted scenario, generated report) rather than
-  // wipe it. Any other fresh mount (National Dashboard, Sidebar) resets like
-  // a real CBU switch so Step 3 doesn't reopen already "Generated".
-  const isFirstCbuEffect = useRef(true);
-  useEffect(() => {
-    if (isFirstCbuEffect.current) {
-      isFirstCbuEffect.current = false;
-      if (!preserveState) dispatch(resetOnCbuChange());
-      return;
+    if (srNo != null && !selectedOldSrNos.includes(srNo)) {
+      dispatch(setSelectedOldSrNos([...selectedOldSrNos, srNo]));
     }
-    dispatch(resetOnCbuChange());
-    setSelectedNewSrNos([]);
-  }, [dispatch, srNo]);
+  }, [srNo, selectedOldSrNos, dispatch]);
+  useEffect(() => {
+    if (newCbuSrNo != null && !selectedNewSrNos.includes(newCbuSrNo)) {
+      dispatch(setSelectedNewSrNos([...selectedNewSrNos, newCbuSrNo]));
+    }
+  }, [newCbuSrNo, selectedNewSrNos, dispatch]);
+
+  // Landing here without a srNo at all — the Sidebar's link carries none, unlike National
+  // Dashboard's per-row flask icon, and this page never remounts on an in-place nav to itself
+  // (constant pageKey — see App.tsx) — shouldn't dead-end on a blank Step 1 if a CBU is already
+  // active in this session. Resume it automatically so the user lands straight back on whatever
+  // they were last working on instead of having to re-pick the same CBU. Guarded by
+  // `selectedOldSrNos` (not just `activeSrNo`) so this can't fight the user's own "×" clear on
+  // the Old CBU field, which also navigates with no srNo but empties selectedOldSrNos first —
+  // that's the one blank state that must actually stay blank.
+  useEffect(() => {
+    if (srNo == null && activeSrNo != null && selectedOldSrNos.includes(activeSrNo)) {
+      navigate({ page: "network-down-stocking-agent-trial", srNo: activeSrNo, preserveState: true });
+    }
+  }, [srNo, activeSrNo, selectedOldSrNos, navigate]);
+
+  // Every Step 1/2/3 input (and the shared IUT/MOQ selections) stays visible for as long as the
+  // *same* Old CBU is active — revisiting it from National Dashboard, the Sidebar, or Actions &
+  // Monitoring all show whatever was last entered. Only an actual CBU switch (a different srNo —
+  // via a fresh nav with new CBU data, or picking a different Old CBU in Step 1 itself, which
+  // navigates with the newly picked srNo) resets Step 2/3 back to defaults for that new CBU.
+  // A momentarily-blank srNo (no CBU chosen yet) is not a switch — nothing to compare against
+  // yet, so it must never wipe whatever's already stored for the CBU the user will resume above.
+  useEffect(() => {
+    if (srNo != null && activeSrNo !== srNo) {
+      dispatch(resetOnCbuChange({ srNo }));
+    }
+  }, [srNo, activeSrNo, dispatch]);
 
   // The dropdown is fully controlled: it hands back the whole next selection,
   // and this derives which one becomes "primary" (the CBU that actually
   // drives Step 2/3) — keep the current primary if it's still selected,
   // otherwise fall back to whichever was picked most recently.
   const handleOldCbuChange = (nextIds: number[]) => {
-    setSelectedOldSrNos(nextIds);
+    dispatch(setSelectedOldSrNos(nextIds));
 
     // A CBU can't be both Old and New at once — the New CBU list already
     // hides whatever's picked here, so drop it from the New selection too if
@@ -124,7 +136,7 @@ export default function NetworkDownStockingSimulator({ srNo, preserveState }: Re
     const oldSet = new Set(nextIds);
     if (selectedNewSrNos.some((id) => oldSet.has(id))) {
       const nextNewIds = selectedNewSrNos.filter((id) => !oldSet.has(id));
-      setSelectedNewSrNos(nextNewIds);
+      dispatch(setSelectedNewSrNos(nextNewIds));
       const nextNewPrimary =
         nextNewIds.length === 0
           ? null
@@ -146,7 +158,7 @@ export default function NetworkDownStockingSimulator({ srNo, preserveState }: Re
   };
 
   const handleNewCbuChange = (nextIds: number[]) => {
-    setSelectedNewSrNos(nextIds);
+    dispatch(setSelectedNewSrNos(nextIds));
     const nextPrimary =
       nextIds.length === 0 ? null : newCbuSrNo != null && nextIds.includes(newCbuSrNo) ? newCbuSrNo : nextIds[nextIds.length - 1];
     if (nextPrimary !== newCbuSrNo) dispatch(setNewCbuSrNo(nextPrimary));
@@ -173,18 +185,22 @@ export default function NetworkDownStockingSimulator({ srNo, preserveState }: Re
     dispatch(setFinalAcceptedId(id));
   };
 
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const saveDraftMutation = useSaveDraftMutation();
+  const isSavingDraft = saveDraftMutation.isPending;
   const handleSaveDraft = () => {
     if (isSavingDraft) return;
-    setIsSavingDraft(true);
-    window.setTimeout(() => {
-      dispatch(saveDraft());
-      setIsSavingDraft(false);
-      toast.success(SAVE_DRAFT_TOAST.title, {
-        description: SAVE_DRAFT_TOAST.description,
-        duration: SAVE_DRAFT_TOAST.duration,
-      });
-    }, SAVE_DRAFT_DELAY_MS);
+    saveDraftMutation.mutate(
+      { oldSrNos: selectedOldSrNos, newSrNos: selectedNewSrNos, projectName },
+      {
+        onSuccess: () => {
+          dispatch(saveDraft());
+          toast.success(SAVE_DRAFT_TOAST.title, {
+            description: SAVE_DRAFT_TOAST.description,
+            duration: SAVE_DRAFT_TOAST.duration,
+          });
+        },
+      }
+    );
   };
 
   const lastSavedDate = lastSavedAt ? new Date(lastSavedAt) : null;

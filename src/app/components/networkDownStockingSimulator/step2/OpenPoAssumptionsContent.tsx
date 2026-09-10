@@ -2,13 +2,13 @@ import { useState } from "react";
 import { ComponentCodeWithDesc } from "../../sciDetails/ComponentCodeWithDesc";
 import {
   C,
-  OPEN_PO_LINES,
   OPEN_PO_STATUS_STYLE,
   PM_BADGE,
   RM_BADGE,
 } from "../../sciDetails/constants";
 import { addDaysIso, daysPastDue } from "../../sciDetails/utils";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
+import type { SimulationAssumptionsCatalog } from "../../../api/networkDownStockingSimulator/step2Api";
 
 const DEFAULT_ROWS_PER_PAGE = 10;
 // Caps the table's own scroll area so a large PO list scrolls internally
@@ -21,35 +21,37 @@ const TABLE_MAX_HEIGHT = "52vh";
  * one in via its checkbox or "Select all" in the header. All default unchecked.
  */
 export function OpenPoAssumptionsContent({
+  openPoLines,
   poIncludedByLine,
   onSetLineIncluded,
   onBulkSetIncluded,
 }: {
+  openPoLines: SimulationAssumptionsCatalog["openPoLines"];
   poIncludedByLine: Record<string, boolean>;
   onSetLineIncluded: (id: string, v: boolean) => void;
   onBulkSetIncluded: (v: boolean) => void;
 }) {
-  const totalQty = OPEN_PO_LINES.reduce((sum, l) => sum + l.qty, 0);
-  const activeQty = OPEN_PO_LINES.reduce((sum, l) => (poIncludedByLine[l.id] ? sum + l.qty : sum), 0);
-  const includedCount = OPEN_PO_LINES.filter((l) => poIncludedByLine[l.id]).length;
-  const rmCount = OPEN_PO_LINES.filter((l) => l.type === "RM").length;
-  const pmCount = OPEN_PO_LINES.filter((l) => l.type === "PM").length;
+  const totalQty = openPoLines.reduce((sum, l) => sum + l.qty, 0);
+  const activeQty = openPoLines.reduce((sum, l) => (poIncludedByLine[l.id] ? sum + l.qty : sum), 0);
+  const includedCount = openPoLines.filter((l) => poIncludedByLine[l.id]).length;
+  const rmCount = openPoLines.filter((l) => l.type === "RM").length;
+  const pmCount = openPoLines.filter((l) => l.type === "PM").length;
 
-  const allActivated = OPEN_PO_LINES.every((l) => poIncludedByLine[l.id]);
-  const allDeactivated = OPEN_PO_LINES.every((l) => !poIncludedByLine[l.id]);
+  const allActivated = openPoLines.every((l) => poIncludedByLine[l.id]);
+  const allDeactivated = openPoLines.every((l) => !poIncludedByLine[l.id]);
 
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
-  const totalRows = OPEN_PO_LINES.length;
+  const totalRows = openPoLines.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
   const safePage = Math.min(page, totalPages);
-  const pagedLines = OPEN_PO_LINES.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+  const pagedLines = openPoLines.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
 
   return (
     <div className="px-6 py-5 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span style={{ color: C.muted }}>
-          {`${includedCount} of ${OPEN_PO_LINES.length} included — ${activeQty.toLocaleString("en-IN")} of ${totalQty.toLocaleString("en-IN")} units active`}
+          {`${includedCount} of ${openPoLines.length} included — ${activeQty.toLocaleString("en-IN")} of ${totalQty.toLocaleString("en-IN")} units active`}
           {` — ${rmCount} RM · ${pmCount} PM`}
         </span>
       </div>

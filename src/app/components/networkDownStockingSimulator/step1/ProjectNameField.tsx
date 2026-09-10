@@ -8,7 +8,8 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Search, X } from "lucide-react";
-import { C, PROJECT_NAME_OPTIONS } from "../../sciDetails/constants";
+import { C } from "../../sciDetails/constants";
+import { useProjectNameOptionsQuery } from "../../../queries/networkDownStockingSimulator";
 
 // Panel chrome/tints with no matching C.* token — kept file-local so parallel
 // edits to constants.ts don't conflict (see step1 refactor notes).
@@ -43,6 +44,8 @@ export function ProjectNameField({
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const { data: projectNameOptions = [] } = useProjectNameOptionsQuery();
 
   const updatePanelPosition = useCallback(() => {
     if (!buttonRef.current) return;
@@ -96,8 +99,8 @@ export function ProjectNameField({
   }, [open]);
 
   const allOptions = useMemo(
-    () => Array.from(new Set([...extraOptions, ...PROJECT_NAME_OPTIONS])),
-    [extraOptions],
+    () => Array.from(new Set([...extraOptions, ...projectNameOptions])),
+    [extraOptions, projectNameOptions],
   );
 
   const filtered = allOptions.filter((opt) => {

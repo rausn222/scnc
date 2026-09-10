@@ -30,7 +30,7 @@ import {
   buildCustomScenarioBaseline,
   buildBaselineScenario,
 } from "../../sciDetails/customOverrides/customOverridesUtils";
-import { C, SCENARIOS, IUT_TRANSFER_OPTIONS, CUSTOM_SCENARIO, NO_ACTION_WASTE } from "../../sciDetails/constants";
+import { C } from "../../sciDetails/constants";
 import { ScenarioComparisonPanel } from "../../sciDetails/step3/ScenarioComparisonPanel";
 import { ScenarioDetailTable } from "./ScenarioDetailTable";
 import { CreateCustomScenarioDrawer } from "./CreateCustomScenarioDrawer";
@@ -51,6 +51,49 @@ import { buildScenarioViewModel, buildSnapshotFromViewModel } from "./scenarioDe
 import { CustomScenarioDetailPage } from "./CustomScenarioDetailPage";
 import { ScenarioDetailView } from "../step4/ScenarioDetailView";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import {
+  setCustomScenarios as setCustomScenariosAction,
+  setCustomScenarioSnapshots as setCustomScenarioSnapshotsAction,
+} from "../../../store/slices/sciDetailSlice";
+import {
+  useAcceptScenarioMutation,
+  useCreateCustomScenarioMutation,
+  useScenarioCatalogQuery,
+  useUpdateCustomScenarioMutation,
+} from "../../../queries/networkDownStockingSimulator";
+import type { ScenarioCatalog } from "../../../api/networkDownStockingSimulator/step3Api";
+
+// Stable fallback so every computation below has something to read from while
+// useScenarioCatalogQuery is still loading — mirrors SimulationAssumptionsStep's
+// EMPTY_ASSUMPTIONS_CATALOG pattern. Never written anywhere, purely a render-time default.
+const EMPTY_SCENARIO_CATALOG: ScenarioCatalog = {
+  scenarios: [],
+  customScenario: {
+    id: "custom",
+    name: "Custom",
+    businessWaste: null,
+    fgDaysCover: null,
+    isBest: false,
+    nextActionPrefix: "",
+    nextAction: "—",
+    icon: "custom",
+    feasibleProducible: 0,
+    productionStopDate: "—",
+    dailyRunRate: 0,
+  },
+  iutTransferOptions: [],
+  moqPlantOptions: [],
+  moqPlantOptionsBreak: [],
+  noActionWaste: 0,
+  plantBreakdownBase: {},
+  predefinedDetail: {} as ScenarioCatalog["predefinedDetail"],
+  focusViewOptions: [],
+  focusViewSavingsTierColor: {} as ScenarioCatalog["focusViewSavingsTierColor"],
+  focusViewIutMaterials: {} as ScenarioCatalog["focusViewIutMaterials"],
+  focusViewProcurement: {} as ScenarioCatalog["focusViewProcurement"],
+  iutTransferSlaDays: 5,
+};
 
 type RecalcOverlay = {
   businessWaste: string;
@@ -136,11 +179,36 @@ export function ScenarioComparisonStep({
   onFinalAcceptedIdChange: (id: string | null) => void;
 }) {
   const { navigate } = useNav();
-  const baseline = SCENARIOS.find((s) => s.id === "no-action")!;
+  const dispatch = useAppDispatch();
+
+  // Step 3's own reference/catalog data (predefined scenarios, IUT/MOQ option catalogs) —
+  // fetched based on the Step 1 selection (Old/New CBU), same as Step 2's assumptions.
+  const scenarioCatalogQuery = useScenarioCatalogQuery(row.cbuCode, newCbuRow?.cbuCode);
+  const catalog = scenarioCatalogQuery.data ?? EMPTY_SCENARIO_CATALOG;
+
+  const baseline: ScenarioRow = catalog.scenarios.find((s) => s.id === "no-action") ?? {
+    id: "no-action",
+    name: "No Action",
+    businessWaste: null,
+    wasteSavings: null,
+    wasteColor: undefined,
+    fgDaysCover: null,
+    isBest: false,
+    nextActionPrefix: "",
+    nextAction: "",
+    icon: "no-action",
+    feasibleProducible: 0,
+    productionStopDate: "—",
+    dailyRunRate: 0,
+  };
   const baselineDays = parseInt(baseline.fgDaysCover ?? "0");
 
+  const createScenarioMutation = useCreateCustomScenarioMutation();
+  const updateScenarioMutation = useUpdateCustomScenarioMutation();
+  const acceptScenarioMutation = useAcceptScenarioMutation();
+
   const viewDetails = (scenario: ScenarioRow) => {
-    const receivingPlantCode = IUT_TRANSFER_OPTIONS.find((o) => o.id === selTransfer)?.routeTo ?? "U535";
+    const receivingPlantCode = catalog.iutTransferOptions.find((o) => o.id === selTransfer)?.routeTo ?? "U535";
     const scenarioDetails = {
       id: scenario.id,
       name: scenario.name,
@@ -175,14 +243,14 @@ export function ScenarioComparisonStep({
 
   const ranked = useMemo(
     () =>
-      [...SCENARIOS]
+      [...catalog.scenarios]
         .filter((s) => s.id !== "no-action")
         .sort((a, b) => {
           const parse = (v: string | null) =>
             v ? parseFloat(v.replace(/[₹,]/g, "")) : Infinity;
           return parse(a.businessWaste) - parse(b.businessWaste);
         }),
-    [],
+    [catalog.scenarios],
   );
 
   // Gate: the comparison report only renders once the user explicitly generates it,
@@ -244,7 +312,7 @@ export function ScenarioComparisonStep({
   // "IUT + Break MOQ" drawer's own Done button: picking the non-recommended routing option no
   // longer prompts for a reason at Select time — instead the reason is requested once, when the
   // user tries to close the drawer via Done, so it doesn't interrupt exploring both options.
-  const breakMoqOptions = useMemo(() => IUT_TRANSFER_OPTIONS.slice(0, 2), []);
+  const breakMoqOptions = useMemo(() => catalog.iutTransferOptions.slice(0, 2), [catalog.iutTransferOptions]);
   const breakMoqRecommended = breakMoqOptions.find((o) => o.isBest) ?? breakMoqOptions[0] ?? null;
   const [showBreakMoqDoneReasonModal, setShowBreakMoqDoneReasonModal] = useState(false);
   const [breakMoqDoneReasonText, setBreakMoqDoneReasonText] = useState("");
@@ -269,12 +337,25 @@ export function ScenarioComparisonStep({
   const [customSnapshotEditState, setCustomSnapshotEditState] = useState<CustomSnapshotEditState>(EMPTY_CUSTOM_SNAPSHOT_EDIT_STATE);
 
   // User-created scenarios — the Create Custom Scenario popup's inline Customise/Done toggle
-  // feeds into this list, capped at MAX_CUSTOM_SCENARIOS.
-  const [customScenarios, setCustomScenarios] = useState<ScenarioRow[]>([]);
+  // feeds into this list, capped at MAX_CUSTOM_SCENARIOS. Backed by redux (not component state)
+  // so it survives leaving the page (e.g. to Actions & Monitoring) and coming back.
+  const customScenarios = useAppSelector((s) => s.sciDetail.customScenarios);
+  const setCustomScenarios = (updater: ScenarioRow[] | ((prev: ScenarioRow[]) => ScenarioRow[])) => {
+    const next = typeof updater === "function" ? (updater as (prev: ScenarioRow[]) => ScenarioRow[])(customScenarios) : updater;
+    dispatch(setCustomScenariosAction(next));
+  };
   // Frozen "More Details" breakdown for each custom scenario, keyed by its id — lets a custom
   // scenario's own popup replay the exact figures it was saved with (see ScenarioDetailTable's
   // "Save as New Scenario").
-  const [customScenarioSnapshots, setCustomScenarioSnapshots] = useState<Record<string, ScenarioDetailSnapshot>>({});
+  const customScenarioSnapshots = useAppSelector((s) => s.sciDetail.customScenarioSnapshots);
+  const setCustomScenarioSnapshots = (
+    updater: Record<string, ScenarioDetailSnapshot> | ((prev: Record<string, ScenarioDetailSnapshot>) => Record<string, ScenarioDetailSnapshot>),
+  ) => {
+    const next = typeof updater === "function"
+      ? (updater as (prev: Record<string, ScenarioDetailSnapshot>) => Record<string, ScenarioDetailSnapshot>)(customScenarioSnapshots)
+      : updater;
+    dispatch(setCustomScenarioSnapshotsAction(next));
+  };
 
   // "Save as New Scenario" (drawer footer) — freezes the current (edited) figures as a
   // brand-new row in the comparison table, capped at MAX_CUSTOM_SCENARIOS.
@@ -282,30 +363,21 @@ export function ScenarioComparisonStep({
 
   const saveCustomScenarioSnapshot = (snapshot: ScenarioDetailSnapshot) => {
     if (atCustomScenarioLimit) return;
-    const n = customScenarios.length + 1;
-    const id = `custom-${Date.now()}-${n}`;
-    const newScenario: ScenarioRow = {
-      id,
-      name: `Custom Scenario ${n}`,
-      businessWaste: snapshot.businessWaste,
-      wasteSavings: snapshot.wasteSavings,
-      wasteColor: snapshot.wasteColor,
-      fgDaysCover: snapshot.fgDaysCover,
-      isBest: false,
-      nextActionPrefix: "",
-      nextAction: "Review Custom Scenario",
-      icon: "custom",
-      feasibleProducible: snapshot.totalFg,
-      productionStopDate: snapshot.productionStopDate,
-      dailyRunRate: 0,
-    };
-    setCustomScenarios((prev) => [...prev, newScenario]);
-    setCustomScenarioSnapshots((prev) => ({ ...prev, [id]: snapshot }));
-    toast.success(`${newScenario.name} added`, {
-      description: `Created from ${snapshot.sourceScenarioName} with your edited values.`,
-      duration: 4000,
-    });
-    closeDetailDrawer();
+    const name = `Custom Scenario ${customScenarios.length + 1}`;
+    createScenarioMutation.mutate(
+      { oldCbuCode: row.cbuCode, name, snapshot },
+      {
+        onSuccess: ({ scenario, snapshot: savedSnapshot }) => {
+          setCustomScenarios((prev) => [...prev, scenario]);
+          setCustomScenarioSnapshots((prev) => ({ ...prev, [scenario.id]: savedSnapshot }));
+          toast.success(`${scenario.name} added`, {
+            description: `Created from ${savedSnapshot.sourceScenarioName} with your edited values.`,
+            duration: 4000,
+          });
+          closeDetailDrawer();
+        },
+      },
+    );
   };
 
 
@@ -361,20 +433,27 @@ export function ScenarioComparisonStep({
   };
 
   const confirmAccept = (scenario: ScenarioRow) => {
-    onSelect(scenario.id);
-    onFinalAcceptedIdChange(scenario.id);
-    const parts = [
-      `Scenario: ${scenario.name}`,
-      `Business Waste: ${scenario.businessWaste}`,
-      ...(scenario.wasteSavings ? [`Savings: ↓ ${scenario.wasteSavings}`] : []),
-      `FG Cover: ${scenario.fgDaysCover}`,
-    ];
-    toast.success(`${scenario.nextAction}`, {
-      description: parts.join("  ·  "),
-      duration: 5000,
-    });
-    onDirty?.();
-    viewDetails(scenario);
+    acceptScenarioMutation.mutate(
+      { scenarioId: scenario.id, oldCbuCode: row.cbuCode },
+      {
+        onSuccess: () => {
+          onSelect(scenario.id);
+          onFinalAcceptedIdChange(scenario.id);
+          const parts = [
+            `Scenario: ${scenario.name}`,
+            `Business Waste: ${scenario.businessWaste}`,
+            ...(scenario.wasteSavings ? [`Savings: ↓ ${scenario.wasteSavings}`] : []),
+            `FG Cover: ${scenario.fgDaysCover}`,
+          ];
+          toast.success(`${scenario.nextAction}`, {
+            description: parts.join("  ·  "),
+            duration: 5000,
+          });
+          onDirty?.();
+          viewDetails(scenario);
+        },
+      },
+    );
   };
 
   const handleAccept = (scenario: ScenarioRow, e: React.MouseEvent) => {
@@ -496,7 +575,7 @@ export function ScenarioComparisonStep({
   const comparisonSafePage = Math.min(comparisonPage, comparisonTotalPages);
 
   const handleCustomScenarioRun = () => {
-    const parseWaste = (v: string | null) => (v ? parseFloat(v.replace(/[₹,]/g, "")) : NO_ACTION_WASTE);
+    const parseWaste = (v: string | null) => (v ? parseFloat(v.replace(/[₹,]/g, "")) : catalog.noActionWaste);
     const parseCover = (v: string | null) => (v ? parseInt(v, 10) : baselineDays);
     const rowCount = customOverrideRows.length;
 
@@ -508,8 +587,8 @@ export function ScenarioComparisonStep({
       const sBaseCover = parseCover(s.fgDaysCover);
       const sWaste = Math.max(0, Math.round(sBaseWaste - rowCount * CUSTOM_WASTE_REDUCTION_PER_ROW));
       const sCover = sBaseCover + Math.round(rowCount * CUSTOM_COVER_INCREASE_PER_ROW_DAYS);
-      const sSavings = NO_ACTION_WASTE - sWaste;
-      const sPct = (sSavings / NO_ACTION_WASTE) * 100;
+      const sSavings = catalog.noActionWaste - sWaste;
+      const sPct = (sSavings / catalog.noActionWaste) * 100;
       recalculated[s.id] = {
         businessWaste: `₹${sWaste.toLocaleString("en-IN")}`,
         wasteSavings: sSavings > 0 ? `₹${sSavings.toLocaleString("en-IN")}` : null,
@@ -561,16 +640,21 @@ export function ScenarioComparisonStep({
     if (isCustomDetailScenario) {
       if (customSnapshotEditState.hasChanges && detailScenario && detailScenarioSnapshot) {
         setIsSavingDetailEdits(true);
-        window.setTimeout(() => {
-          setIsSavingDetailEdits(false);
-          const updated = editStateToSnapshot(detailScenarioSnapshot, customSnapshotEditState);
-          setCustomScenarioSnapshots((prev) => ({ ...prev, [detailScenario.id]: updated }));
-          toast.success(`${detailScenario.name} updated`, {
-            description: "Your edits were saved to this custom scenario.",
-            duration: 4000,
-          });
-          closeDetailDrawer();
-        }, CONFIRM_ACTION_DELAY_MS);
+        const updated = editStateToSnapshot(detailScenarioSnapshot, customSnapshotEditState);
+        updateScenarioMutation.mutate(
+          { scenarioId: detailScenario.id, snapshot: updated },
+          {
+            onSuccess: ({ snapshot: savedSnapshot }) => {
+              setIsSavingDetailEdits(false);
+              setCustomScenarioSnapshots((prev) => ({ ...prev, [detailScenario.id]: savedSnapshot }));
+              toast.success(`${detailScenario.name} updated`, {
+                description: "Your edits were saved to this custom scenario.",
+                duration: 4000,
+              });
+              closeDetailDrawer();
+            },
+          },
+        );
         return;
       }
       closeDetailDrawer();
@@ -581,7 +665,7 @@ export function ScenarioComparisonStep({
       setIsSavingDetailEdits(true);
       window.setTimeout(() => {
         setIsSavingDetailEdits(false);
-        const vm = buildScenarioViewModel(detailModalId, selTransfer, moqSuppliers, scenarioEditState);
+        const vm = buildScenarioViewModel(catalog, detailModalId, selTransfer, moqSuppliers, scenarioEditState);
         if (!vm) return;
         saveCustomScenarioSnapshot(buildSnapshotFromViewModel(vm));
       }, CONFIRM_ACTION_DELAY_MS);
@@ -790,7 +874,7 @@ export function ScenarioComparisonStep({
                         </span>
                         {displaySavings && (() => {
                           const saved = parseFloat((displaySavings ?? "").replace(/[₹,]/g, "")) || 0;
-                          const pct = (saved / NO_ACTION_WASTE) * 100;
+                          const pct = (saved / catalog.noActionWaste) * 100;
                           const color = pct >= SAVINGS_TIER_EXCELLENT_PCT ? C.teal : pct >= SAVINGS_TIER_MODERATE_PCT ? C.warning : C.danger;
                           return (
                             <span className="ml-1.5 font-semibold tabular-nums" style={{ color, fontSize: 10 }}>
@@ -968,7 +1052,7 @@ export function ScenarioComparisonStep({
                         </span>
                         {displaySavings && (() => {
                           const saved = parseFloat((displaySavings ?? "").replace(/[₹,]/g, "")) || 0;
-                          const pct = (saved / NO_ACTION_WASTE) * 100;
+                          const pct = (saved / catalog.noActionWaste) * 100;
                           const color = pct >= SAVINGS_TIER_EXCELLENT_PCT ? C.teal : pct >= SAVINGS_TIER_MODERATE_PCT ? C.warning : C.danger;
                           return (
                             <span className="ml-1.5 font-semibold tabular-nums" style={{ color, fontSize: 10 }}>
@@ -1303,7 +1387,7 @@ export function ScenarioComparisonStep({
             <ScenarioComparisonPanel
               scenarioIds={Array.from(compareIds)}
               onClose={() => setShowComparison(false)}
-              extraScenarios={[CUSTOM_SCENARIO]}
+              extraScenarios={[catalog.customScenario]}
             />
           )}
 
@@ -1400,6 +1484,7 @@ export function ScenarioComparisonStep({
                 // Customise button just like a live scenario.
                 <div className="p-4">
                   <CustomScenarioDetailView
+                    catalog={catalog}
                     snapshot={detailScenarioSnapshot}
                     isCustomising={isCustomising}
                     editState={customSnapshotEditState}
@@ -1437,6 +1522,7 @@ export function ScenarioComparisonStep({
               ) : detailScenario.id === "iut-moq" && detailFromSample ? (
                 <CustomScenarioDetailPage
                   key={detailScenario.id}
+                  catalog={catalog}
                   row={row}
                   selTransfer={selTransfer}
                   onSelTransfer={onSelTransfer}
@@ -1450,6 +1536,7 @@ export function ScenarioComparisonStep({
                 <div className="p-4 space-y-4">
                   <ScenarioDetailTable
                     key={detailScenario.id}
+                    catalog={catalog}
                     scenarioId={detailScenario.id}
                     selTransfer={selTransfer}
                     moqSuppliers={moqSuppliers}
@@ -1459,6 +1546,7 @@ export function ScenarioComparisonStep({
                     onEditStateChange={(patch) => setScenarioEditState((s) => ({ ...s, ...patch }))}
                   />
                   <ScenarioDetailView
+                    catalog={catalog}
                     row={row}
                     scenarioId={detailScenario.id}
                     selTransfer={selTransfer}
@@ -1616,6 +1704,7 @@ export function ScenarioComparisonStep({
       )}
       {showCreateScenarioDrawer && (
         <CreateCustomScenarioDrawer
+          catalog={catalog}
           editState={scenarioEditState}
           onEditStateChange={(patch) =>
             setScenarioEditState((s) => ({

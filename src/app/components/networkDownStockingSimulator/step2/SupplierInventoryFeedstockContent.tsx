@@ -1,22 +1,25 @@
 import { useState } from "react";
 import { ComponentCodeWithDesc } from "../../sciDetails/ComponentCodeWithDesc";
-import { C, RM_BADGE, PM_BADGE, SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS } from "../../sciDetails/constants";
+import { C, RM_BADGE, PM_BADGE } from "../../sciDetails/constants";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
+import type { SimulationAssumptionsCatalog } from "../../../api/networkDownStockingSimulator/step2Api";
 
 const DEFAULT_ROWS_PER_PAGE = 10;
 
 /**
  * "Supplier inventory & feedstock" assumption — Supplier inventory pre-fills from
- * matching OPEN_PO_LINES data where available (see SimulationAssumptionsStep's
- * initialSupplierInventory), Feedstock has no existing data source so it seeds from
+ * matching open PO line data where available (see SimulationAssumptionsStep's
+ * buildDefaultStep2State), Feedstock has no existing data source so it seeds from
  * mock values instead. Both stay freely editable per material.
  */
 export function SupplierInventoryFeedstockContent({
+  materials,
   supplierInventory,
   onSupplierInventoryChange,
   feedstock,
   onFeedstockChange,
 }: {
+  materials: SimulationAssumptionsCatalog["supplierInventoryFeedstockMaterials"];
   supplierInventory: Record<string, string>;
   onSupplierInventoryChange: (materialCode: string, value: string) => void;
   feedstock: Record<string, string>;
@@ -24,10 +27,10 @@ export function SupplierInventoryFeedstockContent({
 }) {
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
-  const totalRows = SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS.length;
+  const totalRows = materials.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
   const safePage = Math.min(page, totalPages);
-  const pagedMaterials = SUPPLIER_INVENTORY_FEEDSTOCK_MATERIALS.slice(
+  const pagedMaterials = materials.slice(
     (safePage - 1) * rowsPerPage,
     safePage * rowsPerPage,
   );

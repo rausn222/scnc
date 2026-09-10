@@ -4,14 +4,20 @@ import { ComponentCodeWithDesc } from "../../sciDetails/ComponentCodeWithDesc";
 import {
   C,
   EXPANDED_BREAKDOWN_HEADER_BG,
-  IUT_TRANSFER_LANES,
-  IUT_LANE_REQUIREMENTS,
   RM_BADGE,
   PM_BADGE,
 } from "../../sciDetails/constants";
 import { occurrenceConfidenceMeta } from "../../sciDetails/utils";
 import { PLANT_CLUSTER_MAP } from "../../data";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
+import { getMaterialBatchKey } from "../../../api/networkDownStockingSimulator/step2Api";
+import type {
+  MaterialBatchRow,
+  SimulationAssumptionsCatalog,
+} from "../../../api/networkDownStockingSimulator/step2Api";
+
+export type { MaterialBatchRow };
+export { getMaterialBatchKey };
 
 // Local one-off color — no exact match in the shared C palette.
 const CHECKBOX_ACCENT_COLOR = "#1769c2";
@@ -22,48 +28,6 @@ const DEFAULT_ROWS_PER_PAGE = 10;
 // Transfer route, Material, [Pre-IUT lead time, Transit time, Shelf-life threshold,
 // Total lead time], Confidence, Possible.
 const TOTAL_COLUMNS = 8;
-
-export type MaterialBatchRow = {
-  plant: string;
-  materialType: "RM" | "PM";
-  materialCode: string;
-  batchNumber: string;
-  expiryDate: string;
-};
-
-/**
- * Batch-level detail shown behind a lane material's expand/collapse toggle
- * below. Keyed by the same material codes each lane actually keeps after
- * its RM/PM filter — 65428959 (PM) on U535→UTR, 64322546 (RM) on UTR→U535 —
- * one batch per plant on that lane so both endpoints are checkable.
- */
-export const MATERIAL_BATCH_DATA: MaterialBatchRow[] = [
-  {
-    plant: "U535",
-    materialType: "PM",
-    materialCode: "65428959",
-    batchNumber: "0009843159",
-    expiryDate: "19-09-2026",
-  },
-  {
-    plant: "UTR",
-    materialType: "PM",
-    materialCode: "65428959",
-    batchNumber: "0009843160",
-    expiryDate: "29-09-2026",
-  },
-  {
-    plant: "UTR",
-    materialType: "RM",
-    materialCode: "64322546",
-    batchNumber: "0009843161",
-    expiryDate: "18-09-2026",
-  },
-];
-
-export function getMaterialBatchKey(row: MaterialBatchRow) {
-  return `${row.materialCode}-${row.plant}-${row.batchNumber}`;
-}
 
 const SHELF_LIFE_THRESHOLD_HELP = "Minimum shelf life for material to be considered for IUT";
 const POSSIBLE_HELP = "Whether this lane is feasible for IUT, based on lead time, shelf life and contract terms for the materials involved";
@@ -95,6 +59,9 @@ function LaneCell({ from, to }: { from: string; to: string }) {
  * possible switch is otherwise the only other interactive action.
  */
 export function IutFeasibilityContent({
+  iutTransferLanes,
+  iutLaneRequirements,
+  materialBatchData,
   iutLanes,
   onTogglePossible,
   contractLeadTimes = {},
@@ -104,6 +71,9 @@ export function IutFeasibilityContent({
   selectedBatches = {},
   onBatchToggle,
 }: {
+  iutTransferLanes: SimulationAssumptionsCatalog["iutTransferLanes"];
+  iutLaneRequirements: SimulationAssumptionsCatalog["iutLaneRequirements"];
+  materialBatchData: MaterialBatchRow[];
   iutLanes: Record<string, boolean>;
   onTogglePossible: (laneKey: string) => void;
   contractLeadTimes?: Record<string, string>;
@@ -119,10 +89,10 @@ export function IutFeasibilityContent({
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
 
-  const totalRows = IUT_TRANSFER_LANES.length;
+  const totalRows = iutTransferLanes.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
   const safePage = Math.min(page, totalPages);
-  const pagedLanes = IUT_TRANSFER_LANES.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+  const pagedLanes = iutTransferLanes.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
 
   return (
     <div className="px-6 py-5">
@@ -175,11 +145,11 @@ export function IutFeasibilityContent({
             {pagedLanes.map((lane) => {
               const laneKey = `${lane.from}→${lane.to}`;
               const possible = iutLanes[laneKey];
-              const materials = (IUT_LANE_REQUIREMENTS[laneKey] ?? []).filter(
+              const materials = (iutLaneRequirements[laneKey] ?? []).filter(
                 (m) => m.type === lane.keepType,
               );
               const materialsWithBatches = materials
-                .map((mat) => ({ mat, batchRows: MATERIAL_BATCH_DATA.filter((b) => b.materialCode === mat.code) }))
+                .map((mat) => ({ mat, batchRows: materialBatchData.filter((b) => b.materialCode === mat.code) }))
                 .filter(({ batchRows }) => batchRows.length > 0);
               const hasLaneBatches = materialsWithBatches.length > 0;
               const isExpanded = hasLaneBatches && (expanded[laneKey] ?? false);
@@ -263,7 +233,7 @@ export function IutFeasibilityContent({
                         <span style={{ color: C.borderMuted }}>—</span>
                       ) : (
                         materials.map((mat) => {
-                          const hasBatches = MATERIAL_BATCH_DATA.some((b) => b.materialCode === mat.code);
+                          const hasBatches = materialBatchData.some((b) => b.materialCode === mat.code);
                           if (!hasBatches) {
                             return (
                               <div key={mat.code} className="h-[26px] flex items-center" style={{ color: C.borderLight }}>
@@ -303,7 +273,7 @@ export function IutFeasibilityContent({
                         <span style={{ color: C.borderMuted }}>—</span>
                       ) : (
                         materials.map((mat) => {
-                          const hasBatches = MATERIAL_BATCH_DATA.some((b) => b.materialCode === mat.code);
+                          const hasBatches = materialBatchData.some((b) => b.materialCode === mat.code);
                           if (!hasBatches) {
                             return (
                               <div key={mat.code} className="h-[26px] flex items-center" style={{ color: C.borderLight }}>

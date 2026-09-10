@@ -24,26 +24,17 @@ import {
 import type { CBURow } from "../../data";
 import { ProductionPlanModal } from "../../ProductionPlanModal";
 import type { ComponentBreakdownRow } from "../../sciDetails/types";
+import type { ScenarioRow } from "../../sciDetails/types";
 import {
   C,
-  IUT_TRANSFER_OPTIONS,
-  MOQ_PLANT_OPTIONS,
-  MOQ_PLANT_OPTIONS_BREAK,
-  PLANT_BREAKDOWN_BASE,
   PM_BADGE,
   RM_BADGE,
-  SCENARIOS,
 } from "../../sciDetails/constants";
 import { computeTransitionRows, formatIndianNumber, getActivePlantRoles } from "../../sciDetails/utils";
 import { TransposedComponentBreakdownTable, type TransposedBreakdownColumn } from "../../sciDetails/step4/TransposedComponentBreakdownTable";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
 import { ATTENTION_TEXT, BEST_TINT_BG, LANE_UNAVAILABLE_COLOR, NEUTRAL_CARD_BG } from "./ScenarioDetailPrimitives";
 import {
-  FOCUS_VIEW_IUT_MATERIALS,
-  FOCUS_VIEW_OPTIONS,
-  FOCUS_VIEW_PROCUREMENT,
-  FOCUS_VIEW_SAVINGS_TIER_COLOR,
-  IUT_TRANSFER_SLA_DAYS,
   summarizeIutMaterials,
   summarizeProcurement,
   tagComparisonValues,
@@ -52,6 +43,7 @@ import {
   type IutTransferMaterialLine,
   type ProcurementMaterialLine,
 } from "../../../constants/networkDownStockingAgent";
+import type { ScenarioCatalog } from "../../../api/networkDownStockingSimulator/step3Api";
 
 type Tab = "focus" | "compare";
 /** How the Overview / IUT Transfer / Procurement cards are arranged — stacked or side-by-side. */
@@ -277,14 +269,16 @@ function InlineNumberField({ value, onChange, width = 56 }: { value: number; onC
 
 function IutMaterialMiniCard({
   line,
+  iutTransferSlaDays,
   editable = false,
   onChange,
 }: {
   line: IutTransferMaterialLine;
+  iutTransferSlaDays: number;
   editable?: boolean;
   onChange?: (patch: IutMaterialPatch) => void;
 }) {
-  const flagged = line.leadTimeDays > IUT_TRANSFER_SLA_DAYS;
+  const flagged = line.leadTimeDays > iutTransferSlaDays;
   return (
     <div
       className="rounded-lg px-3 py-2.5"
@@ -364,6 +358,7 @@ function OrderMiniCard({
 
 export function CustomScenarioDetailPage({
   row,
+  catalog,
   scenarioId = "iut-moq",
   selTransfer,
   onSelTransfer,
@@ -372,6 +367,7 @@ export function CustomScenarioDetailPage({
   maxCustomScenarios,
   onAddCustomScenario,
 }: {
+  catalog: ScenarioCatalog;
   row: CBURow;
   scenarioId?: "iut-moq" | "iut-moq-break";
   selTransfer: string;
@@ -384,13 +380,28 @@ export function CustomScenarioDetailPage({
   /** Saves the customised Business Waste / FG Days Cover as a new "Custom Scenario N" row. */
   onAddCustomScenario: (businessWaste: string, fgDaysCover: string) => void;
 }) {
-  const scenario = SCENARIOS.find((s) => s.id === scenarioId) ?? SCENARIOS.find((s) => s.id === "iut-moq")!;
-  const counterpartScenario = SCENARIOS.find((s) => s.id === (scenarioId === "iut-moq" ? "iut-moq-break" : "iut-moq"));
+  const fallbackScenario: ScenarioRow = {
+    id: "iut-moq",
+    name: "IUT + Procure",
+    businessWaste: null,
+    wasteSavings: null,
+    wasteColor: undefined,
+    fgDaysCover: null,
+    isBest: false,
+    nextActionPrefix: "",
+    nextAction: "",
+    icon: "iut-moq",
+    feasibleProducible: 0,
+    productionStopDate: "—",
+    dailyRunRate: 0,
+  };
+  const scenario = catalog.scenarios.find((s) => s.id === scenarioId) ?? catalog.scenarios.find((s) => s.id === "iut-moq") ?? fallbackScenario;
+  const counterpartScenario = catalog.scenarios.find((s) => s.id === (scenarioId === "iut-moq" ? "iut-moq-break" : "iut-moq"));
 
   const [tab, setTab] = useState<Tab>("focus");
   const [sectionLayout, setSectionLayout] = useState<SectionLayout>("vertical");
   const [productionPlanPlant, setProductionPlanPlant] = useState<string | null>(null);
-  const [compareIds, setCompareIds] = useState<Set<string>>(new Set(FOCUS_VIEW_OPTIONS.map((o) => o.id)));
+  const [compareIds, setCompareIds] = useState<Set<string>>(new Set(catalog.focusViewOptions.map((o) => o.id)));
   const [showIutMaterials, setShowIutMaterials] = useState(false);
   const [showOrders, setShowOrders] = useState(true);
 
@@ -403,9 +414,9 @@ export function CustomScenarioDetailPage({
   const [draftCover, setDraftCover] = useState(() => String(parseInt(scenario.fgDaysCover ?? "0", 10) || 0));
   const atCustomScenarioLimit = customScenarioCount >= maxCustomScenarios;
 
-  const selectedOption = FOCUS_VIEW_OPTIONS.find((o) => o.id === selTransfer) ?? FOCUS_VIEW_OPTIONS[0];
-  const iutMaterials = FOCUS_VIEW_IUT_MATERIALS[selectedOption.id];
-  const procurementLines = FOCUS_VIEW_PROCUREMENT[selectedOption.id];
+  const selectedOption = catalog.focusViewOptions.find((o) => o.id === selTransfer) ?? catalog.focusViewOptions[0];
+  const iutMaterials = catalog.focusViewIutMaterials[selectedOption.id];
+  const procurementLines = catalog.focusViewProcurement[selectedOption.id];
 
   // Customise edits, keyed by material code — merged over the base data wherever it's displayed
   // (table, mini-cards, stat cards) so an edit is visible everywhere at once, matching how
@@ -455,7 +466,7 @@ export function CustomScenarioDetailPage({
   const [selectedMaterialCode, setSelectedMaterialCode] = useState(iutMaterials[0].code);
   useEffect(() => {
     // Selecting a different option resets which material's route detail is shown.
-    setSelectedMaterialCode(FOCUS_VIEW_IUT_MATERIALS[selectedOption.id][0].code);
+    setSelectedMaterialCode(catalog.focusViewIutMaterials[selectedOption.id][0].code);
   }, [selectedOption.id]);
   const selectedMaterial =
     effectiveIutMaterials.find((m) => m.code === selectedMaterialCode) ?? effectiveIutMaterials[0];
@@ -466,14 +477,14 @@ export function CustomScenarioDetailPage({
   // Per-option summaries for the Compare tab — computed once for all three options regardless
   // of which are currently checked, so toggling a checkbox doesn't need to recompute the rest.
   const iutSummaryByOption = useMemo(
-    () => Object.fromEntries(FOCUS_VIEW_OPTIONS.map((o) => [o.id, summarizeIutMaterials(FOCUS_VIEW_IUT_MATERIALS[o.id])])) as Record<FocusViewOption["id"], ReturnType<typeof summarizeIutMaterials>>,
+    () => Object.fromEntries(catalog.focusViewOptions.map((o) => [o.id, summarizeIutMaterials(catalog.focusViewIutMaterials[o.id])])) as Record<FocusViewOption["id"], ReturnType<typeof summarizeIutMaterials>>,
     [],
   );
   const procurementSummaryByOption = useMemo(
-    () => Object.fromEntries(FOCUS_VIEW_OPTIONS.map((o) => [o.id, summarizeProcurement(FOCUS_VIEW_PROCUREMENT[o.id])])) as Record<FocusViewOption["id"], ReturnType<typeof summarizeProcurement>>,
+    () => Object.fromEntries(catalog.focusViewOptions.map((o) => [o.id, summarizeProcurement(catalog.focusViewProcurement[o.id])])) as Record<FocusViewOption["id"], ReturnType<typeof summarizeProcurement>>,
     [],
   );
-  const visibleOptions = FOCUS_VIEW_OPTIONS.filter((o) => compareIds.has(o.id));
+  const visibleOptions = catalog.focusViewOptions.filter((o) => compareIds.has(o.id));
 
   const toggleCompareId = (id: string) => {
     setCompareIds((prev) => {
@@ -489,9 +500,9 @@ export function CustomScenarioDetailPage({
   };
 
   // ── Component Breakdown by Plant — unchanged logic, kept at the bottom of the page ──
-  const transferOptions = IUT_TRANSFER_OPTIONS.slice(0, scenarioId === "iut-moq" ? 3 : 2);
+  const transferOptions = catalog.iutTransferOptions.slice(0, scenarioId === "iut-moq" ? 3 : 2);
   const selectedRealTransfer = transferOptions.find((o) => o.id === selTransfer) ?? transferOptions[0] ?? null;
-  const moqPlantData = scenarioId === "iut-moq-break" ? MOQ_PLANT_OPTIONS_BREAK : MOQ_PLANT_OPTIONS;
+  const moqPlantData = scenarioId === "iut-moq-break" ? catalog.moqPlantOptionsBreak : catalog.moqPlantOptions;
   const selectedMoqForBreakdown = moqPlantData.find((p) => p.isBest) ?? moqPlantData[0] ?? null;
   const [filter, setFilter] = useState("");
   const activePlantRoles = useMemo(
@@ -526,7 +537,7 @@ export function CustomScenarioDetailPage({
       const afterByComponent = new Map(
         block.rowsByState.after.filter((r) => matched.has(r.component)).map((r) => [r.component, r]),
       );
-      const plantMeta = PLANT_BREAKDOWN_BASE[block.code];
+      const plantMeta = catalog.plantBreakdownBase[block.code];
       for (const before of beforeRows) {
         cols.push({
           key: `${block.code}-${before.component}`,
@@ -548,7 +559,7 @@ export function CustomScenarioDetailPage({
           plantCode={productionPlanPlant}
           cbuCode={row.cbuCode}
           cbuDescription={row.cbuDescription}
-          totalProduction={PLANT_BREAKDOWN_BASE[productionPlanPlant]?.totalProductionPlanQty ?? 0}
+          totalProduction={catalog.plantBreakdownBase[productionPlanPlant]?.totalProductionPlanQty ?? 0}
           onClose={() => setProductionPlanPlant(null)}
         />
       )}
@@ -621,7 +632,7 @@ export function CustomScenarioDetailPage({
               Select an option to view its details
             </span>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {FOCUS_VIEW_OPTIONS.map((option) => {
+              {catalog.focusViewOptions.map((option) => {
                 const isSelected = option.id === selectedOption.id;
                 return (
                   <button
@@ -683,8 +694,8 @@ export function CustomScenarioDetailPage({
                     <span
                       className="self-start px-2 py-0.5 rounded-full text-[9px] font-bold"
                       style={{
-                        backgroundColor: isSelected ? "rgba(255,255,255,0.15)" : `${FOCUS_VIEW_SAVINGS_TIER_COLOR[option.savingsTier]}1a`,
-                        color: isSelected ? C.white : FOCUS_VIEW_SAVINGS_TIER_COLOR[option.savingsTier],
+                        backgroundColor: isSelected ? "rgba(255,255,255,0.15)" : `${catalog.focusViewSavingsTierColor[option.savingsTier]}1a`,
+                        color: isSelected ? C.white : catalog.focusViewSavingsTierColor[option.savingsTier],
                       }}
                     >
                       {option.savingsLabel}
@@ -711,7 +722,7 @@ export function CustomScenarioDetailPage({
                 )}
                 <span
                   className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                  style={{ backgroundColor: "rgba(255,255,255,0.12)", color: FOCUS_VIEW_SAVINGS_TIER_COLOR[selectedOption.savingsTier] }}
+                  style={{ backgroundColor: "rgba(255,255,255,0.12)", color: catalog.focusViewSavingsTierColor[selectedOption.savingsTier] }}
                 >
                   {selectedOption.savingsLabel}
                 </span>
@@ -909,14 +920,14 @@ export function CustomScenarioDetailPage({
               })}
             </div>
 
-            {selectedMaterial.leadTimeDays > IUT_TRANSFER_SLA_DAYS && (
+            {selectedMaterial.leadTimeDays > catalog.iutTransferSlaDays && (
               <div
                 className="flex items-center gap-2 rounded-lg px-3.5 py-2.5"
                 style={{ backgroundColor: C.warningBgLight, border: `1px solid ${C.warningBorder}` }}
               >
                 <AlertTriangle size={13} style={{ color: C.warningText, flexShrink: 0 }} />
                 <span className="text-xs font-semibold" style={{ color: C.warningTextDark }}>
-                  Lead time exceeds {IUT_TRANSFER_SLA_DAYS}-day SLA
+                  Lead time exceeds {catalog.iutTransferSlaDays}-day SLA
                 </span>
               </div>
             )}
@@ -1007,6 +1018,7 @@ export function CustomScenarioDetailPage({
                     <IutMaterialMiniCard
                       key={material.code}
                       line={material}
+                      iutTransferSlaDays={catalog.iutTransferSlaDays}
                       editable={isCustomising}
                       onChange={(patch) => updateIutOverride(material.code, patch)}
                     />
@@ -1040,7 +1052,7 @@ export function CustomScenarioDetailPage({
                     </thead>
                     <tbody>
                       {pagedIutMaterials.map((material) => {
-                        const breaches = material.leadTimeDays > IUT_TRANSFER_SLA_DAYS;
+                        const breaches = material.leadTimeDays > catalog.iutTransferSlaDays;
                         return (
                           <tr
                             key={material.code}
@@ -1061,7 +1073,7 @@ export function CustomScenarioDetailPage({
                               {breaches && (
                                 <div className="flex items-center gap-1 mt-1" style={{ color: C.warningText }}>
                                   <AlertTriangle size={9} />
-                                  <span className="text-[10px] font-semibold">Lead time exceeds {IUT_TRANSFER_SLA_DAYS}-day SLA</span>
+                                  <span className="text-[10px] font-semibold">Lead time exceeds {catalog.iutTransferSlaDays}-day SLA</span>
                                 </div>
                               )}
                             </td>
@@ -1251,7 +1263,7 @@ export function CustomScenarioDetailPage({
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {FOCUS_VIEW_OPTIONS.map((option) => {
+            {catalog.focusViewOptions.map((option) => {
               const checked = compareIds.has(option.id);
               return (
                 <label
@@ -1399,8 +1411,8 @@ export function CustomScenarioDetailPage({
                     {visibleOptions.map((option) => (
                       <td key={option.id} className="px-3 py-3 align-top">
                         <div className="flex flex-col gap-2">
-                          {FOCUS_VIEW_IUT_MATERIALS[option.id].map((m) => (
-                            <IutMaterialMiniCard key={m.code} line={m} />
+                          {catalog.focusViewIutMaterials[option.id].map((m) => (
+                            <IutMaterialMiniCard key={m.code} line={m} iutTransferSlaDays={catalog.iutTransferSlaDays} />
                           ))}
                         </div>
                       </td>
@@ -1465,7 +1477,7 @@ export function CustomScenarioDetailPage({
                     {visibleOptions.map((option) => (
                       <td key={option.id} className="px-3 py-3 align-top">
                         <div className="flex flex-col gap-2">
-                          {FOCUS_VIEW_PROCUREMENT[option.id].map((l) => (
+                          {catalog.focusViewProcurement[option.id].map((l) => (
                             <OrderMiniCard key={l.code} line={l} />
                           ))}
                         </div>
