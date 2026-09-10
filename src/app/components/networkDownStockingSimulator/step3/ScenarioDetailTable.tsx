@@ -209,7 +209,6 @@ export function ScenarioDetailTable({
   return (
     <div className="flex flex-col gap-3">
       {/* ── Summary ── */}
-      {!isCreateMode && (
       <div className="rounded-lg overflow-hidden bg-white" style={{ border: `1px solid ${C.border}` }}>
         <SectionHeading
           title="Summary"
@@ -230,11 +229,10 @@ export function ScenarioDetailTable({
               sub={coverDateLabel(scenario.fgDaysCover) ? `till ${coverDateLabel(scenario.fgDaysCover)}` : undefined}
             />
             <StatTile label="Total FG Producible" value={`${formatIndianNumber(totalFg)} EA`} />
-            <StatTile label="Total Cost" value={`₹${formatIndianNumber(totalCost)}`} />
+            <StatTile label="IUT Cost" value={`₹${formatIndianNumber(totalCost)}`} />
           </div>
         )}
       </div>
-      )}
 
       {/* ── IUT ── */}
       {vm.iutActive && (
@@ -463,8 +461,6 @@ export function ScenarioDetailTable({
                   <Th>Supplier Name &amp; Code</Th>
                   <Th align={isCreateMode ? "left" : "right"}>Order Quantity</Th>
                   <Th align={isCreateMode ? "left" : "right"}>MOQ</Th>
-                  <Th align={isCreateMode ? "left" : "right"}>Price / Unit</Th>
-                  <Th align={isCreateMode ? "left" : "right"}>Total Estimated Cost</Th>
                   {isCustomising && <Th align="center"> </Th>}
                 </tr>
               </thead>
@@ -558,22 +554,6 @@ export function ScenarioDetailTable({
                       ) : (
                         <span className="tabular-nums">{formatIndianNumber(row.moq)}</span>
                       )}
-                    </Td>
-                    <Td align={isCreateMode ? "left" : "right"}>
-                      {row.custom && isCustomising ? (
-                        isCreateMode ? (
-                          <span className="font-semibold tabular-nums" style={{ color: C.navy }}>
-                            ₹{autoProcurementValues(row.plant, row.matType, row.matCode, row.supplierName).pricePerUnit}
-                          </span>
-                        ) : <EditableCell type="number" align="right" value={row.pricePerUnit} onChange={(v) => updateAddedProcurementRow(row.id, { pricePerUnit: Number(v) || 0 })} width={64} />
-                      ) : (
-                        <span className="tabular-nums">₹{row.pricePerUnit}</span>
-                      )}
-                    </Td>
-                    <Td align={isCreateMode ? "left" : "right"}>
-                      <span className="font-bold tabular-nums" style={{ color: C.navy }}>
-                        ₹{formatIndianNumber(isCreateMode ? row.orderQty * autoProcurementValues(row.plant, row.matType, row.matCode, row.supplierName).pricePerUnit : row.total)}
-                      </span>
                     </Td>
                     {isCustomising && (
                       <Td align="center">

@@ -1,14 +1,11 @@
 import { useState } from "react";
-import { Check, X } from "lucide-react";
 import { ComponentCodeWithDesc } from "../../sciDetails/ComponentCodeWithDesc";
 import {
   C,
-  OPEN_PO_CANCELLABLE_LINES,
   OPEN_PO_LINES,
   OPEN_PO_STATUS_STYLE,
   PM_BADGE,
   RM_BADGE,
-  isOpenPoLineCancellable,
 } from "../../sciDetails/constants";
 import { addDaysIso, daysPastDue } from "../../sciDetails/utils";
 import { TablePagination } from "../../nationalDashboard/TablePagination";
@@ -19,11 +16,9 @@ const DEFAULT_ROWS_PER_PAGE = 10;
 const TABLE_MAX_HEIGHT = "52vh";
 
 /**
- * Every PO line and its status are always visible on open. Cancellable lines
- * default to unchecked — the planner opts each one in via its checkbox, "Select
- * all" in the header, or the Include all/Cancel all bulk actions. In-transit and
- * partially delivered lines are always fixed — stock already moving to the
- * plant can't be pulled back.
+ * Every PO line and its status are always visible on open, and every line's
+ * checkbox is independently selectable/deselectable — the planner opts each
+ * one in via its checkbox or "Select all" in the header. All default unchecked.
  */
 export function OpenPoAssumptionsContent({
   poIncludedByLine,
@@ -35,19 +30,13 @@ export function OpenPoAssumptionsContent({
   onBulkSetIncluded: (v: boolean) => void;
 }) {
   const totalQty = OPEN_PO_LINES.reduce((sum, l) => sum + l.qty, 0);
-  const activeQty = OPEN_PO_LINES.reduce((sum, l) => {
-    if (!isOpenPoLineCancellable(l.status)) return sum + l.qty;
-    return poIncludedByLine[l.id] ? sum + l.qty : sum;
-  }, 0);
-  const includedCount =
-    OPEN_PO_LINES.length -
-    OPEN_PO_CANCELLABLE_LINES.length +
-    OPEN_PO_CANCELLABLE_LINES.filter((l) => poIncludedByLine[l.id]).length;
+  const activeQty = OPEN_PO_LINES.reduce((sum, l) => (poIncludedByLine[l.id] ? sum + l.qty : sum), 0);
+  const includedCount = OPEN_PO_LINES.filter((l) => poIncludedByLine[l.id]).length;
   const rmCount = OPEN_PO_LINES.filter((l) => l.type === "RM").length;
   const pmCount = OPEN_PO_LINES.filter((l) => l.type === "PM").length;
 
-  const allCancellableActivated = OPEN_PO_CANCELLABLE_LINES.every((l) => poIncludedByLine[l.id]);
-  const allCancellableCancelled = OPEN_PO_CANCELLABLE_LINES.every((l) => !poIncludedByLine[l.id]);
+  const allActivated = OPEN_PO_LINES.every((l) => poIncludedByLine[l.id]);
+  const allDeactivated = OPEN_PO_LINES.every((l) => !poIncludedByLine[l.id]);
 
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_ROWS_PER_PAGE);
@@ -63,34 +52,6 @@ export function OpenPoAssumptionsContent({
           {`${includedCount} of ${OPEN_PO_LINES.length} included — ${activeQty.toLocaleString("en-IN")} of ${totalQty.toLocaleString("en-IN")} units active`}
           {` — ${rmCount} RM · ${pmCount} PM`}
         </span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            title="Activate all cancellable open PO lines"
-            className="flex text-xs items-center gap-1 px-2.5 py-1 rounded-full font-semibold transition-colors cursor-pointer"
-            style={{
-              backgroundColor: allCancellableActivated ? C.successBg : C.bgSlate,
-              color: allCancellableActivated ? C.successText : C.borderMuted,
-            }}
-            onClick={() => onBulkSetIncluded(true)}
-          >
-            <Check size={12} />
-            Include all
-          </button>
-          <button
-            type="button"
-            title="Cancel all cancellable open PO lines"
-            className="flex text-xs items-center gap-1 px-2.5 py-1 rounded-full font-semibold transition-colors cursor-pointer"
-            style={{
-              backgroundColor: allCancellableCancelled ? C.dangerBg : C.bgSlate,
-              color: allCancellableCancelled ? C.dangerDark : C.borderMuted,
-            }}
-            onClick={() => onBulkSetIncluded(false)}
-          >
-            <X size={12} />
-            Cancel all
-          </button>
-        </div>
       </div>
 
       <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
@@ -101,12 +62,12 @@ export function OpenPoAssumptionsContent({
               <th className="px-3 py-2.5 text-left" style={{ color: C.white, fontSize: 9 }}>
                 <input
                   type="checkbox"
-                  checked={allCancellableActivated}
+                  checked={allActivated}
                   ref={(el) => {
-                    if (el) el.indeterminate = !allCancellableActivated && !allCancellableCancelled;
+                    if (el) el.indeterminate = !allActivated && !allDeactivated;
                   }}
                   onChange={(e) => onBulkSetIncluded(e.target.checked)}
-                  title="Select all cancellable open PO lines"
+                  title="Select all open PO lines"
                   className="rounded cursor-pointer"
                 />
               </th>
@@ -136,31 +97,23 @@ export function OpenPoAssumptionsContent({
           </thead>
           <tbody>
             {pagedLines.map((line) => {
-              const cancellable = isOpenPoLineCancellable(line.status);
-              const effectivelyIncluded = !cancellable || poIncludedByLine[line.id];
               // Partially delivered stock is still moving to the plant, same as fully
               // in-transit stock — shown as "In Transit" here so the status column
               // reflects that shared meaning instead of splitting it out visually.
               const displayStatus = line.status === "Partially Delivered" ? "In Transit" : line.status;
               const statusStyle = OPEN_PO_STATUS_STYLE[displayStatus];
               const ageing = daysPastDue(line.poDeliveryDate);
-              const checkboxTitle = !cancellable
-                ? "In-transit POs cannot be cancelled."
-                : poIncludedByLine[line.id]
-                  ? "Exclude this PO line"
-                  : "Include this PO line";
+              const checkboxTitle = poIncludedByLine[line.id] ? "Exclude this PO line" : "Include this PO line";
 
               return (
                 <tr key={line.id} style={{ borderTop: `1px solid ${C.bgSlate}` }}>
                   <td className="px-3 py-2.5">
                     <input
                       type="checkbox"
-                      checked={effectivelyIncluded}
-                      disabled={!cancellable}
+                      checked={!!poIncludedByLine[line.id]}
                       onChange={(e) => onSetLineIncluded(line.id, e.target.checked)}
                       title={checkboxTitle}
-                      className="rounded"
-                      style={{ cursor: !cancellable ? "not-allowed" : "pointer" }}
+                      className="rounded cursor-pointer"
                     />
                   </td>
                   <td className="px-3 py-2.5 font-medium whitespace-nowrap">{line.plant}</td>

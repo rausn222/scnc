@@ -10,6 +10,7 @@ import {
   type RmpmBomConnectivityRow,
   type RmpmBomPendingStatus,
 } from "../../sciDetails/constants";
+import { DateWeekEditor } from "../../sciDetails/step2/DateWeekEditor";
 
 // Local one-off colors — no exact match in the shared C palette.
 const ISSUE_TEXT_COLOR = "#b45309";
@@ -190,15 +191,9 @@ export function RmpmBomPendingContent({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
-                        <input
-                          type="text"
-                          value={date}
-                          onChange={(e) => handleDateChange(group.key, e.target.value)}
-                          placeholder="dd-mm-yyyy"
-                          maxLength={10}
-                          title="Connectivity date (dd-mm-yyyy)"
-                          className="text-xs px-2 py-1 rounded-lg"
-                          style={{ border: "1px solid #d1d5db", color: date ? C.navy : "#94a3b8", width: 96 }}
+                        <DateWeekEditor
+                          date={date}
+                          onChange={(d) => handleDateChange(group.key, d)}
                         />
                         <button
                           type="button"

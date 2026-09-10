@@ -7,7 +7,6 @@ import {
   IUT_TRANSFER_LANES,
   MOQ_BREAK_MATERIALS,
   MOQ_BREAK_SUPPLIERS,
-  OPEN_PO_CANCELLABLE_LINES,
   OPEN_PO_LINES,
   RMPM_BOM_CONNECTIVITY_ROWS,
   RMPM_BOM_PENDING_LIES_WITH,
@@ -58,7 +57,7 @@ export function SimulationAssumptionsStep({
 }) {
   const [networkTransitionDate, setNetworkTransitionDate] = useState("");
   const [poIncludedByLine, setPoIncludedByLine] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(OPEN_PO_CANCELLABLE_LINES.map((l) => [l.id, false])),
+    () => Object.fromEntries(OPEN_PO_LINES.map((l) => [l.id, false])),
   );
   const [rmpmDate, setRmpmDate] = useState("");
   // Manual RMPM connectivity date shown inline on the tile when no New CBU is selected —
@@ -139,7 +138,7 @@ export function SimulationAssumptionsStep({
   const handleBulkSetIncluded = (v: boolean) => {
     setPoIncludedByLine((prev) => {
       const next = { ...prev };
-      OPEN_PO_CANCELLABLE_LINES.forEach((l) => { next[l.id] = v; });
+      OPEN_PO_LINES.forEach((l) => { next[l.id] = v; });
       return next;
     });
     onDirty?.();
@@ -232,12 +231,11 @@ export function SimulationAssumptionsStep({
     ? `Plant-to-plant lane availability. Old CBU ${oldCbuRow.cbuCode} - New CBU ${newCbuRow.cbuCode}`
     : `Plant-to-plant lane availability. Old CBU ${oldCbuRow.cbuCode}`;
 
-  // How many of the PO lines are currently included in the simulation (cancelling some
-  // cancellable lines excludes them from this count).
-  const openPoIncludedCount = useMemo(() => {
-    const cancellableIds = new Set(OPEN_PO_CANCELLABLE_LINES.map((l) => l.id));
-    return OPEN_PO_LINES.filter((l) => !cancellableIds.has(l.id) || poIncludedByLine[l.id]).length;
-  }, [poIncludedByLine]);
+  // How many of the PO lines are currently included in the simulation.
+  const openPoIncludedCount = useMemo(
+    () => OPEN_PO_LINES.filter((l) => poIncludedByLine[l.id]).length,
+    [poIncludedByLine],
+  );
   const openPoRmCount = useMemo(() => OPEN_PO_LINES.filter((l) => l.type === "RM").length, []);
   const openPoPmCount = useMemo(() => OPEN_PO_LINES.filter((l) => l.type === "PM").length, []);
   const openPoSubtitle = `${openPoIncludedCount} of ${OPEN_PO_LINES.length} included — ${openPoRmCount} RM · ${openPoPmCount} PM`;
@@ -266,8 +264,11 @@ export function SimulationAssumptionsStep({
     [newCbuRow, newCbuOpenPoLines],
   );
 
+  // New CBU is single-select in Step 1, so this is always 0 or 1 — computed
+  // rather than hardcoded so the subtitle stays correct if that ever changes.
+  const newCbuCount = newCbuRow ? 1 : 0;
   const rmpmSubtitle = newCbuRow
-    ? `1 new CBU (${newCbuRow.cbuCode}) - material delivery date`
+    ? `${newCbuCount} new CBU (${newCbuRow.cbuCode}) - material delivery date`
     : "New CBU material delivery date";
 
   // BOM exists but the PO doesn't yet (contract or PO creation pending) — these two get
@@ -521,7 +522,7 @@ export function SimulationAssumptionsStep({
           title={"RMPM connectivity date"}
           subtitle={RMPM_BOM_PENDING_TILE_LABEL[rmpmBomPendingStatus]}
           onClose={() => setOpenModal(null)}
-          maxWidth="min(94vw, 760px)"
+          maxWidth="min(97vw, 1280px)"
           maxHeight="86vh"
         >
           <RmpmBomPendingContent

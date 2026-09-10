@@ -279,7 +279,7 @@ export function CustomScenarioDetailView({
               sub={coverDateLabel(snapshot.fgDaysCover) ? `till ${coverDateLabel(snapshot.fgDaysCover)}` : undefined}
             />
             <StatTile label="Total FG Producible" value={`${formatIndianNumber(snapshot.totalFg)} EA`} />
-            <StatTile label="Total Cost" value={`₹${formatIndianNumber(displayTotalCost)}`} />
+            <StatTile label="IUT Cost" value={`₹${formatIndianNumber(displayTotalCost)}`} />
           </div>
         )}
       </div>
@@ -439,8 +439,6 @@ export function CustomScenarioDetailView({
                         <Th>Supplier Name</Th>
                         <Th align="right">Order Quantity</Th>
                         <Th align="right">MOQ</Th>
-                        <Th align="right">Price / Unit</Th>
-                        <Th align="right">Total Estimated Cost</Th>
                         <Th align="center"> </Th>
                       </tr>
                     </thead>
@@ -469,10 +467,6 @@ export function CustomScenarioDetailView({
                           <Td align="right">
                             <EditableCell type="number" align="right" value={row.moq} onChange={(v) => updateProcurementRow(row.id, { moq: Number(v) || 0 })} width={64} />
                           </Td>
-                          <Td align="right">
-                            <EditableCell type="number" align="right" value={row.pricePerUnit} onChange={(v) => updateProcurementRow(row.id, { pricePerUnit: Number(v) || 0 })} width={64} />
-                          </Td>
-                          <Td align="right"><span className="font-bold tabular-nums" style={{ color: C.navy }}>₹{formatIndianNumber(row.orderQty * row.pricePerUnit)}</span></Td>
                           <Td align="center">
                             <RowDeleteButton onClick={() => removeProcurementRow(row.id)} title="Remove this procurement row" />
                           </Td>
@@ -514,8 +508,6 @@ export function CustomScenarioDetailView({
                         <Th>Supplier Name &amp; Code</Th>
                         <Th align="right">Order Quantity</Th>
                         <Th align="right">MOQ</Th>
-                        <Th align="right">Price / Unit</Th>
-                        <Th align="right">Total Estimated Cost</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -543,8 +535,6 @@ export function CustomScenarioDetailView({
                             </span>
                           </Td>
                           <Td align="right"><span className="tabular-nums">{formatIndianNumber(row.moq)}</span></Td>
-                          <Td align="right"><span className="tabular-nums">₹{row.pricePerUnit}</span></Td>
-                          <Td align="right"><span className="font-bold tabular-nums" style={{ color: C.navy }}>₹{formatIndianNumber(row.total)}</span></Td>
                         </tr>
                       ))}
                     </tbody>

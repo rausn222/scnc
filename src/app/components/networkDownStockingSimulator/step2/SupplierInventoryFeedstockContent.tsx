@@ -6,7 +6,7 @@ import { TablePagination } from "../../nationalDashboard/TablePagination";
 const DEFAULT_ROWS_PER_PAGE = 10;
 
 /**
- * New "Supplier inventory & feedstock" assumption — Supplier inventory pre-fills from
+ * "Supplier inventory & feedstock" assumption — Supplier inventory pre-fills from
  * matching OPEN_PO_LINES data where available (see SimulationAssumptionsStep's
  * initialSupplierInventory), Feedstock has no existing data source so it seeds from
  * mock values instead. Both stay freely editable per material.
