@@ -171,17 +171,29 @@ const sciDetailSlice = createSlice({
     /** Fires whenever the active (Old CBU) srNo actually changes — a genuine CBU switch, whether
      * that came from picking a different CBU in Step 1 or arriving fresh with a different srNo
      * from National Dashboard/Sidebar. Revisiting the *same* CBU (from any entry point) should
-     * never hit this, so everything entered for it stays visible — see NetworkDownStockingSimulator. */
+     * never hit this, so everything entered for it stays visible — see NetworkDownStockingSimulator.
+     * Also fires whenever the Old CBU multi-select itself hands back a new primary — picking "All",
+     * removing the current primary while others stay picked, or bulk-applying CBUs picked in the
+     * Create Project modal — and in every one of those cases `setSelectedOldSrNos`/
+     * `setSelectedNewSrNos` have already landed the caller's intended next lists by the time this
+     * runs. So only fall back to `[srNo]` (and drop the New CBU pairing) when srNo isn't already
+     * part of the tracked Old CBU list; otherwise this would wipe selections that were just made
+     * together with this primary switch, in the same action. */
     resetOnCbuChange(state, action: PayloadAction<{ srNo: number | null }>) {
-      state.activeSrNo = action.payload.srNo;
-      state.newCbuSrNo = null;
+      const srNo = action.payload.srNo;
+      const srNoAlreadyTracked = srNo != null && state.selectedOldSrNos.includes(srNo);
+
+      state.activeSrNo = srNo;
       state.acceptedId = null;
       state.hasChanges = false;
       state.lastSavedAt = null;
       state.scenariosGenerated = false;
       state.finalAcceptedId = null;
-      state.selectedOldSrNos = action.payload.srNo != null ? [action.payload.srNo] : [];
-      state.selectedNewSrNos = [];
+      if (!srNoAlreadyTracked) {
+        state.selectedOldSrNos = srNo != null ? [srNo] : [];
+        state.newCbuSrNo = null;
+        state.selectedNewSrNos = [];
+      }
       state.selectedDraftId = "";
       state.step2 = null;
       state.customScenarios = [];

@@ -9,6 +9,7 @@ import { DraftIdField, DraftRecord } from "./DraftIdField";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import { setSelectedDraftId } from "../../../store/slices/sciDetailSlice";
 import { useCreateProjectMutation } from "../../../queries/networkDownStockingSimulator";
+import { useCbuListQuery } from "../../../queries/cbuQueries";
 
 /**
  * Step 1 of the Network Down Stocking Agent flow — Old CBU, New CBU and
@@ -43,6 +44,7 @@ export function SelectCbuStep({
   const selectedDraftId = useAppSelector((s) => s.sciDetail.selectedDraftId);
   const isMultiOldCbuSelected = oldSrNos.length > 1;
   const createProjectMutation = useCreateProjectMutation();
+  const { data: cbuListData } = useCbuListQuery();
 
   const handleProjectsCreated = (records: NewProjectRecord[]) => {
     createProjectMutation.mutate(
@@ -53,6 +55,27 @@ export function SelectCbuStep({
           if (names.length === 0) return;
           setCreatedProjectNames((prev) => [...names, ...prev]);
           onProjectNameChange(names[0]);
+
+          // Mirror the Old/New CBUs picked inside the "Create New Project" modal back onto
+          // this step's own CBU dropdowns, so they're not left blank after the project exists.
+          // Only the first created record feeds this — same "use the first one" rule already
+          // applied to the project name above (a template upload can create several at once).
+          // Replaces rather than merges with whatever was already picked (same as loading a
+          // Draft ID does) — merging risked pushing the Old CBU count above 1 and silently
+          // clearing New CBU right back out, since New CBU auto-disables whenever more than
+          // one Old CBU is selected.
+          const codeToSrNo = new Map((cbuListData ?? []).map((row) => [row.cbuCode, row.srNo]));
+          const codesToSrNos = (codes: string[]) =>
+            codes.map((code) => codeToSrNo.get(code)).filter((sr): sr is number => sr != null);
+          const primaryTransitions = created[0]?.transitions ?? [];
+          const projectOldSrNos = codesToSrNos(primaryTransitions.flatMap((t) => t.oldCodes));
+          const projectNewSrNos = codesToSrNos(primaryTransitions.flatMap((t) => t.newCodes));
+
+          if (projectOldSrNos.length > 0) {
+            onOldCbuChange(projectOldSrNos);
+            onNewCbuChange(projectNewSrNos);
+          }
+
           setShowCreateProject(false);
         },
       }

@@ -83,13 +83,12 @@ export default function NetworkDownStockingSimulator({ srNo }: Readonly<Props>) 
   const selectedNewSrNos = useAppSelector((s) => s.sciDetail.selectedNewSrNos);
   const activeSrNo = useAppSelector((s) => s.sciDetail.activeSrNo);
 
-  // Keeps the multi-select set in sync when the primary CBU changes from
-  // outside the dropdown itself (e.g. arriving here with a srNo already set).
-  useEffect(() => {
-    if (srNo != null && !selectedOldSrNos.includes(srNo)) {
-      dispatch(setSelectedOldSrNos([...selectedOldSrNos, srNo]));
-    }
-  }, [srNo, selectedOldSrNos, dispatch]);
+  // Old CBU's multi-select set is kept in sync purely by `resetOnCbuChange` below — it already
+  // folds a not-yet-tracked `srNo` into `selectedOldSrNos`, whether that's a genuine switch or an
+  // already-tracked primary being revisited. A `srNo`-driven sync effect here can't reliably tell
+  // "arriving with a srNo already set" apart from "`srNo` just hasn't caught up yet with a fresher
+  // `selectedOldSrNos`" (the prop and this page's redux dispatches land in separate renders), so
+  // it risks re-appending a primary that was just intentionally dropped.
   useEffect(() => {
     if (newCbuSrNo != null && !selectedNewSrNos.includes(newCbuSrNo)) {
       dispatch(setSelectedNewSrNos([...selectedNewSrNos, newCbuSrNo]));
