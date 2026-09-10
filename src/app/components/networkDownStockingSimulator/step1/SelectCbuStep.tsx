@@ -88,13 +88,13 @@ export function SelectCbuStep({
       overflowVisible
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="w-full lg:basis-[22%]">
+        <div className="w-full min-w-0 lg:basis-[22%]">
           <DraftIdField
             value={selectedDraftId}
             onChange={handleDraftChange}
           />
         </div>
-        <div className="w-full lg:basis-[22%]">
+        <div className="w-full min-w-0 lg:basis-[22%]">
           <CbuDropdownField
             label="Old CBU"
             selectedSrNos={oldSrNos}
@@ -103,7 +103,7 @@ export function SelectCbuStep({
             multiSelect={true}
           />
         </div>
-        <div className="w-full lg:basis-[22%]">
+        <div className="w-full min-w-0 lg:basis-[22%]">
           <CbuDropdownField
             label="New CBU"
             selectedSrNos={newSrNos}
@@ -125,7 +125,7 @@ export function SelectCbuStep({
             </p>
           )}
         </div>
-        <div className="w-full lg:basis-[22%]">
+        <div className="w-full min-w-0 lg:basis-[22%]">
           <ProjectNameField
             value={projectName}
             onChange={onProjectNameChange}

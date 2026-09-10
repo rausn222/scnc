@@ -193,7 +193,13 @@ export function CbuDropdownField({
         : placeholder
       : selectedRows.length === 1
         ? formatCbuLabel(selectedRows[0])
-        : `${selectedRows.length} selected — ${selectedRows.map((r) => r.cbuCode).join(", ")}`;
+        : `${selectedRows.length} selected`;
+
+  // Full code list still surfaces on hover even though the trigger only shows a count.
+  const displayTooltip =
+    selectedRows.length > 1
+      ? `${selectedRows.length} selected — ${selectedRows.map((r) => r.cbuCode).join(", ")}`
+      : displayValue;
 
   const panel = open ? (
     <div
@@ -332,7 +338,7 @@ export function CbuDropdownField({
           disabled={disabled}
           aria-expanded={open}
           aria-haspopup="listbox"
-          title={displayValue}
+          title={displayTooltip}
           className="w-full appearance-none pl-2.5 pr-7 py-1.5 rounded-full text-xs cursor-pointer focus:outline-none transition-all truncate text-left"
           style={{
             backgroundColor: disabled ? C.bgSlateLight : C.white,
